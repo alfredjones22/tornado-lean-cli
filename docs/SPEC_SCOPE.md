@@ -1,5 +1,16 @@
 # Native CLI safety specification: current scope
 
+The [withdrawal security specification](WITHDRAWAL_SECURITY_SPEC.md) is the
+human-readable entry point. In addition to the earlier policy models below,
+`Runtime/WithdrawalDriver.lean` is the command machine actually interpreted
+by `Cli/WithdrawalSend.lean`; `Spec/WithdrawalDriverProofs.lean` constrains its
+review, full executable payload, reservation, exposure and single-send gates.
+`Spec/WorkerDisclosure.lean` covers the real restricted worker program, and
+`Spec/BlindingDistribution.lean`, `Spec/BlindingPair.lean` and
+`Spec/BlindingBounds.lean` cover the shared bounded sampler under an IID
+uniform-candidate assumption. These additions do not certify all command
+drivers, physical IO or cryptographic secrecy.
+
 `Tornado/Spec/Attempt.lean` states fund-safety requirements independently of
 the policy transition code. `Tornado/Spec/Refinement.lean` proves that the
 current native `Tornado.Policy` and `Tornado.Policy.Batch` transition functions
@@ -92,9 +103,10 @@ consensus verification. Runtime receipt parsers check exact transaction,
 chain and event bindings against configured endpoint claims; those checks do
 not authenticate chain truth.
 
-The specification and abstract drivers cover one-note and batch withdrawal
-policy transitions. They are not the runnable `WithdrawalSend`, relayer,
-deposit or recovery command drivers. Relayer fee validation does reuse the
+The earlier specification and abstract drivers described above cover one-note
+and batch withdrawal policy transitions. They are separate from the newer
+runnable sponsored `WithdrawalDriver` and from relayer, deposit or recovery
+command drivers. Relayer fee validation does reuse the
 proved pure fee policy, but that reuse does not certify the complete command.
 Cryptographic soundness, witness/circuit correspondence, deployed contracts,
 network behavior, secret handling and filesystem durability remain separate

@@ -7,6 +7,8 @@ Vendored dependencies and reference fixtures retain their original license notic
 
 This directory contains the runnable Lean executable, its native libraries, specifications, proofs, compatibility vectors, and verification scripts. It targets clean `tornado-cli-new-era` commit `daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7` with `@kohaku-eth/tornado-cash@0.1.0-alpha.38`. Lean is pinned to `leanprover/lean4:v4.29.1`.
 
+Start with the [withdrawal security specification](docs/WITHDRAWAL_SECURITY_SPEC.md) to review the user-facing rules, their executable definitions, and their assumptions. It distinguishes reviewed-intent and exposure guarantees, worker disclosure confinement, conditional blinding-distribution proofs, and the unproved end-to-end zero-knowledge/completeness claims. **The configured history RPC is trusted with deposit–withdrawal linkage:** it can correlate selected deposit receipt queries with selected nullifier-spent queries.
+
 ## Build and run
 
 ```sh
@@ -78,7 +80,7 @@ With Node 22.18 or newer, `node scripts/verify.mjs` builds the project, rejects 
 
 ## Meaning of the proofs
 
-The [proof scope](docs/PROOF_SCOPE.md) names each native theorem and its limits. Theorems cover exact catalog facts, selected transaction/receipt/ABI guards, rejection of failed simulation, relayer fee conservation, reservation and send ordering, and event-to-policy confirmation requirements. Read-only parity is bounded to 156 catalog/planner/version cases plus six note-file cases; connected money-moving routes have focused offline vectors and injected fault tests. These are not an end-to-end proof that runnable commands refine the fund-safety models. Theorems do not prove the cryptographic algorithms correct, the TypeScript CLI equivalent on all inputs, the C/OS boundary, filesystem durability, RPC truth, Groth16 security, or deployed-contract behavior. Compatibility vectors are tests, not cryptographic security proofs.
+The [proof scope](docs/PROOF_SCOPE.md) names each native theorem and its limits. Theorems cover exact catalog facts, selected transaction/receipt/ABI guards, rejection of failed simulation, relayer fee conservation, reservation and send ordering, and event-to-policy confirmation requirements. The sponsored withdrawal runner dispatches through its proved command machine, the worker runs a restricted effect program with a typed release gate, and the sampler shares its bounded loop with a finite distribution model. Read-only parity is bounded to 156 catalog/planner/version cases plus six note-file cases; connected money-moving routes have focused offline vectors and injected fault tests. These are not end-to-end proofs of all commands. Theorems do not prove the cryptographic algorithms correct, the TypeScript CLI equivalent on all inputs, the C/OS boundary, physical filesystem durability, RPC truth, Groth16 security, or deployed-contract behavior. Compatibility vectors are tests, not cryptographic security proofs.
 
 The fund-safety specification is: sign only the exact reviewed recipient, pool, amount, fee and ordered actions; preserve a claim before exposing anything executable; never create a duplicate or replacement while an outcome is uncertain; and report success only from matching transaction and event evidence. Native Lean provides definitions and proof-carrying validators for these rules, and selected policy/replay theorems establish parts of them. There is no complete proof that every effectful command follows those rules across actual files, processes and network failures.
 

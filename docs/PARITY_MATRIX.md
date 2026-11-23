@@ -50,7 +50,7 @@ They are not resolved merely by adding more proofs over the current code.
 
 `node scripts/verify.mjs` rebuilds the native modules, rejects undeclared axioms and proof escapes, checks the exact C extern allowlist, runs finite crypto/protocol vectors and OS-boundary fault tests, and compares the supported catalog/planner/note-file surface with the pinned TypeScript CLI. The full gate must be rerun after every implementation change; an older `reports/verify.json` is not evidence for current source.
 
-Lean theorems constrain selected pure native definitions: catalog facts, ABI/transaction encodings, event matching, fee arithmetic, planner conservation, policy transitions, and abstract effect ordering. Read-only differential coverage is 156 catalog/planner/version cases plus six note-file cases. Connected send engines have focused offline compatibility and injected fault tests; they do not yet have a theorem showing their actual C/HTTPS execution traces refine the policy model. Exact source parity and theorems over pure helpers cannot establish whole-program correctness on their own.
+Lean theorems constrain selected native definitions: catalog facts, ABI/transaction encodings, event matching, fee arithmetic, planner conservation, policy transitions, and abstract effect ordering. The sponsored runner now uses the proved `WithdrawalDriver` command machine, binding full canonical authorized bytes and callback ordering. The real worker uses a restricted effect language with a proved typed release envelope. The sampler's shared loop has finite distribution/independence/exhaustion proofs under IID uniform decoded candidates. Read-only differential coverage is 156 catalog/planner/version cases plus six note-file cases. Other send engines retain focused offline compatibility and injected fault tests. No theorem establishes physical C/HTTPS effects or whole-program correctness. See the [withdrawal security specification](WITHDRAWAL_SECURITY_SPEC.md).
 
 An internal one-note proof-to-call builder joins a protected note, selected-pool history, exact-block root/leaf/spent checks, authenticated proving assets, fresh blinding, and Classic calldata. A public unfunded fixture matched the pinned SDK's 256-byte proof and call encoding in about 194 seconds. Runnable commands instead use the isolated worker/session route; neither prover route has constant-time or secure-erasure guarantees.
 
@@ -68,6 +68,13 @@ expected events; standalone status is observed inclusion, not finality.
 Classic relayer discovery, registration/stake/status/fee checks, verified proof binding and one-POST execution are connected. Revalidation follows typed approval, and an exclusive permanent per-note claim precedes POST. Lost responses, missing job IDs, partial journal writes and ambiguous status never trigger a second POST. A job response alone cannot establish confirmation; matching pool receipt/event evidence is required. Relayer status currently reports observed inclusion without a twelve-block wait; sponsored and recovery sends use twelve observed confirmations before owner-lock release. Neither is authenticated finality.
 
 The HTTPS RPC, Saga proxy, bundler, relayer, C/POSIX and libsecp256k1 boundaries, disk hardware, worker installation, Ethereum finality, deployed pool/verifier code, and cryptographic hardness are external assumptions. Malformed or inconsistent API data fails closed within explicit bounds; an internally consistent malicious RPC can still lie. Chain IDs, block hashes, receipts and event checks do not establish truth without consensus-state authentication.
+
+The history RPC is also a privacy trust boundary: selected deposit receipt
+and selected nullifier-spent queries can reveal deposit–withdrawal linkage to
+an operator who can associate the requests. Worker capability confinement
+does not hide this parent-side association or prove that allowed proof bytes
+contain no covert information. Full Groth16 completeness and implementation
+zero knowledge remain unproved.
 
 The fund-safety specification requires exact reviewed intent before signing,
 reservation before executable exposure, no duplicate/replacement under

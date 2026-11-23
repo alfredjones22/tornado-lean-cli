@@ -2,6 +2,7 @@ import Tornado.Runtime.ProverWorkerClient
 import Tornado.Runtime.Bundler
 import Tornado.Protocol.SelectedPoolBootstrap
 import Tornado.SmartAccount.Recovery
+import Tornado.Protocol.DirectWithdrawalIntent
 
 /-! Public-only preparation for the pinned Tornado paymaster. Every proof is
 checked against its reviewed inputs before it can enter a UserOperation. This
@@ -76,6 +77,13 @@ def single (note : NoteProof) (sender recipient : Nat) (gas : Gas)
   let op := { baseOperation sender 0 gas with
     paymaster := some sponsor, paymasterData := ← sponsorData note }
   Bundler.validate op bounds
+  let _ ← DirectWithdrawalIntent.accept {
+    sender, sponsor, pool := note.request.pool, recipient,
+    proof := note.result.proof, root := ← Abi.uintWord note.request.root,
+    nullifierHash := ← Abi.uintWord note.request.nullifierHash, fee := note.request.fee,
+    verificationGas := gas.verification, preVerificationGas := gas.preVerification,
+    paymasterVerificationGas := gas.paymasterVerification, postOpGas := gas.postOp,
+    maxFee := gas.maxFee, priorityFee := gas.priority } op
   return op
 
 structure Account where

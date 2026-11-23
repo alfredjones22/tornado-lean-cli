@@ -122,7 +122,7 @@ function theoremInventory(file, source) {
     if (namespace) { namespaces.push(namespace[1]); continue }
     const end = /^\s*end(?:\s+[A-Za-z_][\w.]*)?\s*$/.exec(line)
     if (end && namespaces.length) { namespaces.pop(); continue }
-    const theorem = /^\s*(?:private\s+)?theorem\s+([A-Za-z_][\w']*)\b/.exec(line)
+    const theorem = /^\s*(?:private\s+)?theorem\s+([A-Za-z_][\w.']*)\b/.exec(line)
     if (theorem) declarations.push([...namespaces, theorem[1]].join('.'))
     const printed = /^\s*#print axioms\s+([A-Za-z_][\w.]*)\s*$/.exec(line)
     if (printed) prints.push(printed[1])
@@ -199,6 +199,10 @@ const requiredFocusedTests = {
   'tests/SmartAccountStatus.lean': 'PASS: recovery journal, zero-value typed transaction, receipt, inclusion, and RPC-chain checks',
   'tests/NullifierSpent.lean': 'PASS: exact-block nullifier-spent selection, ABI, and RPC checks',
   'tests/ProofBlinding.lean': 'PASS: unbiased bounded Groth16 blinding admission and injected entropy',
+  'tests/DirectWithdrawalIntent.lean': 'PASS: decoded direct withdrawal intent, canonical sponsor bytes, and 22 unauthorized mutations',
+  'tests/WorkerDisclosure.lean': 'PASS: restricted worker capabilities, typed canonical output, fixed failures, and explicit entropy effects',
+  'tests/BlindingDistribution.lean': 'PASS: exhaustive sampler stream counts, normalization, sequential pair independence, and biased/reused-scalar negative controls',
+  'tests/WithdrawalDriver.lean': 'PASS: runnable withdrawal machine, exact reviewed payload, callback fault traces and terminal uncertainty',
   'tests/ProverWorkerWire.lean': 'PASS: strict public prover worker wire and request/result binding',
   'tests/Bundler.lean': 'PASS: bounded bundler codec and estimates, durable exposure order, and ambiguous-send stop',
   'tests/DepositMultiSend.lean': 'PASS: native multi-deposit sequence, durable-before-send, exact transaction/event binding, and ambiguity stop',
@@ -256,6 +260,26 @@ const requiredTheorems = [
   'Tornado.Protocol.Abi.validated_call_count',
   'Tornado.Protocol.Abi.decoded_sponsor_reencodes',
   'Tornado.Protocol.Abi.byteArray_eq_of_beq',
+  'Tornado.Protocol.DirectWithdrawalIntent.checked_recipient',
+  'Tornado.Protocol.DirectWithdrawalIntent.checked_payout',
+  'Tornado.Protocol.DirectWithdrawalIntent.checked_no_execution',
+  'Tornado.Protocol.DirectWithdrawalIntent.checked_canonical_bytes',
+  'Tornado.Protocol.DirectWithdrawalIntent.checked_complete_intent',
+  'Tornado.Spec.WorkerDisclosure.execution_confined',
+  'Tornado.Spec.WorkerDisclosure.protection_precedes_access',
+  'Tornado.Spec.WorkerDisclosure.terminal_output_shape',
+  'Tornado.Spec.WorkerDisclosure.proof_release_rechecks_request_binding',
+  'Tornado.Spec.WorkerDisclosure.signature_release_rechecks_request_binding',
+  'Tornado.Spec.WithdrawalDriver.prepared_review_is_actual_builder',
+  'Tornado.Spec.WithdrawalDriver.finalized_changes_only_signature',
+  'Tornado.Spec.WithdrawalDriver.finalized_binds_full_authorized_bytes',
+  'Tornado.Spec.WithdrawalDriver.next_send_requires_prior_acks',
+  'Tornado.Spec.WithdrawalDriver.failed_reservation_blocks_exposure',
+  'Tornado.Spec.WithdrawalDriver.lost_send_reply_keeps_unknown_path',
+  'Tornado.Spec.WithdrawalDriver.dispatched_network_has_prior_successes',
+  'Tornado.Spec.WithdrawalDriver.reachable_one_signature_and_submission',
+  'Tornado.Spec.WithdrawalDriver.returned_report_has_global_callback_cap',
+  'Tornado.Spec.WithdrawalDriver.signed_payload_is_stable',
   'Tornado.Protocol.UserOperation08.hash_ignores_signature',
   'Tornado.Protocol.UserOperation08.no_paymaster_has_empty_data',
   'Tornado.Protocol.UserOperation08.uint128_overflow_rejected',
@@ -365,6 +389,15 @@ const requiredTheorems = [
   'Tornado.Cli.NullifierSpent.accepted_selection_binds_pool',
   'Tornado.Cli.NullifierSpent.accepted_spent_is_canonical',
   'Tornado.Runtime.ProofBlinding.admitted_scalar_shape',
+  'Tornado.Spec.BlindingDistribution.runtime_candidate_matches',
+  'Tornado.Spec.BlindingDistribution.normalization',
+  'Tornado.Spec.BlindingDistribution.conditional_uniform',
+  'Tornado.Spec.BlindingDistribution.pair_joint_factorizes',
+  'Tornado.Spec.BlindingDistribution.conditional_pair_independent',
+  'Tornado.Spec.BlindingDistribution.conditional_pair_uniform',
+  'Tornado.Spec.BlindingDistribution.pair_success_denominator_positive',
+  'Tornado.Spec.BlindingDistribution.production_scalar_exhaustion_bound',
+  'Tornado.Spec.BlindingDistribution.production_pair_exhaustion_bound',
   'Tornado.Spec.JournalIORefinement.replay_success_metadata',
   'Tornado.Spec.JournalIORefinement.replay_direct_send_requires_reservation',
   'Tornado.Spec.JournalIORefinement.replay_batch_send_requires_all_reservations',
@@ -420,6 +453,8 @@ try {
       'tests/SmartAccountStatus.lean',
       'tests/NullifierSpent.lean',
       'tests/ProofBlinding.lean', 'tests/ProverWorkerWire.lean',
+      'tests/DirectWithdrawalIntent.lean', 'tests/WorkerDisclosure.lean',
+      'tests/BlindingDistribution.lean', 'tests/WithdrawalDriver.lean',
       'tests/ProverWorkerClient.lean', 'tests/ProverWorker.lean',
       'tests/Bundler.lean', 'tests/DepositMultiSend.lean', 'tests/DepositBatch7702.lean',
       'tests/RecoverySend.lean', 'tests/ImportedAbi.lean', 'tests/RelayerSend.lean',
@@ -610,7 +645,7 @@ try {
     'selected_pool_bootstrap_test', 'deposit_send_test', 'deposit_multi_test',
     'native_signer_test',
     'withdraw_proof_test', 'tornado_prover_worker', 'prover_worker_test', 'history_snapshot_test',
-    'prover_worker_metadata_test', 'relayer_submit_test',
+    'prover_worker_metadata_test', 'relayer_submit_test', 'worker_disclosure_test',
     'gzip_test', 'groth16_full_public_test',
     'classic_proof_pipeline_full_test', ...moduleTargets], 600000)
   requireCheck(existsSync(path('.lake/build/bin/tornado')), 'Native Lean executable missing after build')
@@ -631,6 +666,7 @@ try {
     existsSync(path('.lake/build/bin/history_snapshot_test')) &&
     existsSync(path('.lake/build/bin/prover_worker_metadata_test')) &&
     existsSync(path('.lake/build/bin/relayer_submit_test')) &&
+    existsSync(path('.lake/build/bin/worker_disclosure_test')) &&
     existsSync(path('.lake/build/bin/gzip_test')) &&
     existsSync(path('.lake/build/bin/groth16_full_public_test')) &&
     existsSync(path('.lake/build/bin/classic_proof_pipeline_full_test')),
@@ -817,7 +853,9 @@ try {
     for (const [file, expected] of Object.entries(requiredFocusedTests)) {
       const args = ['env', 'lean', '--run', file]
       if (file === 'tests/ProvingKey.lean') args.push(keyTempPath)
-      const output = run('lake', args, 600000)
+      const output = file === 'tests/WorkerDisclosure.lean'
+        ? run(path('.lake/build/bin/worker_disclosure_test'), [], 600000)
+        : run('lake', args, 600000)
       requireCheck(output.trim() === expected, `Unexpected focused native test output from ${file}: ${output}`)
       focusedTests.push({ file, result: 'PASS', detail: expected })
     }
@@ -1075,7 +1113,7 @@ try {
       importedSafeAbi: '28_ENCODING_AND_20_REJECTION_CASES',
       classicRelayerQuote: 'REGISTRY_STAKE_FEE_RECHECK_OFFLINE_TESTED',
       classicRelayerSubmit: 'EXPERIMENTAL_NATIVE_ONE_POST_PROOF_AND_CLAIM_FAULT_TESTED',
-      nativeBlindingSampling: 'BOUNDED_UNBIASED_INTERNAL_WITHDRAWAL_BUILDER',
+      nativeBlindingSampling: 'SHARED_BOUNDED_LOOP_WITH_FINITE_DRAW_DISTRIBUTION_PROOFS_CONDITIONAL_ON_IID_CANDIDATES',
       historyReducerSdkRootVectors: 6,
       eventViemVectors: 7, eventExactEvidenceChecks: 33, eventRejectionChecks: 39 },
     readOnlyParity: { status: parity.status, matched: parity.matched, total: parity.total,
@@ -1125,6 +1163,17 @@ try {
       unsupportedLeafCommands: unsupportedCommands.length, unsupportedFailClosedTests: unsupportedCommands.length,
       moneyMovingParity: false },
     fullCliParity: false, fullCliCorrectnessProof: false,
+    withdrawalSecurity: {
+      specification: 'docs/WITHDRAWAL_SECURITY_SPEC.md',
+      sponsoredRunnerUsesProvedCommandMachine: true,
+      finalPayloadIncludesSeparateAuthorization: true,
+      directSponsorFieldsDecodedAndChecked: true,
+      workerUsesRestrictedEffectProgramAndTypedRelease: true,
+      callbacksAndPhysicalDurabilityTrusted: true,
+      fullGroth16CompletenessProved: false,
+      implementationZeroKnowledgeProved: false,
+      sideChannelSafetyOrErasureProved: false,
+      historyRpcTrustedWithDepositWithdrawalLinkage: true },
     limitations: [
       'Exact CLI differential cases cover pools, deposit plan, notes inspect/invoice, and root version flags. New command modes have focused offline checks, not complete TypeScript differential parity. Backup creation uses random generation with finite compatibility and recovery checks.',
       'The planner grid and crypto vectors are finite tests, not all-input or cryptographic-security proofs.',
@@ -1132,7 +1181,9 @@ try {
       'Experimental direct, relayer and batch withdrawal commands are connected and tested with public fixtures and injected effects only. The isolated native Lean prover and note-derived signer remain variable time and nonzeroizing; worker binary pinning, funded testing and an end-to-end correctness proof remain open.',
       'A generic pairing helper accepts a caller-supplied key; the compiled Classic wrapper instead fixes every key point to reviewed source. No selected pool or deployed verifier code is authenticated or connected to a command.',
       'A bounded selected-pool Saga/RPC fetch loop, pinned offline assets and protected snapshot cache serve history, compliance report, and withdrawal preflight. The cache rechecks checkpoints and handles reorgs, but provider completeness and consensus are not proved. An endpoint can omit or fabricate chain data.',
-      'The exact-block isSpent check used by history and withdrawal preflight discloses the nullifier hash to the configured RPC; its response is not an authenticated state proof.',
+      'The history RPC is trusted with deposit-withdrawal linkage: selected deposit receipt and exact-block nullifier-spent queries can be correlated by its operator. Responses are not authenticated state proofs.',
+      'The sponsored runner uses the proved command machine; callback traces do not prove physical writes, crash recovery, signer behavior or absence of extra callback effects. Relayer/deposit/recovery runners are outside this refinement.',
+      'Worker capability and typed-output confinement do not establish cryptographic zero knowledge, absence of covert encoding in permitted outputs, secret-independent failure/timing/resources, or secure erasure. Sampler distribution proofs assume IID uniform decoded 256-bit candidates and do not cover later prover failure conditioning.',
       'Experimental pay-invoice can sign and broadcast with a local invoice claim, sender lock, conservative maximum-gas cap, and twelve-confirmation gate. Its key-file signer uses a protected native libsecp256k1 boundary, but the C/compiler/OS behavior, complete erasure, live HTTP effects, deployed contracts, and fund safety are not end-to-end proved or funded-testnet validated.',
       'Sequential and Simple7702 multi-note deposits have experimental live adapters with offline fault tests and pinned viem vectors. Signed delegation is journaled before estimation; no funded end-to-end test or correctness proof was completed.',
       'Experimental recovery and withdrawal live adapters require explicit mode selection and typed approval. Development sent no funded transactions. Offline fault tests and exact event reconciliation do not establish complete command parity or production fund safety. Shared sender locks coordinate only one protected key directory; copies elsewhere are not globally coordinated.',

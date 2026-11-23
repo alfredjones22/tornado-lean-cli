@@ -1,5 +1,13 @@
 # Native history and compliance report scope
 
+**Privacy trust boundary:** the configured history RPC is trusted with
+deposit–withdrawal linkage. Validation requests the selected deposit's
+transaction receipt and the selected nullifier's spent status. An operator
+able to associate those requests can link the deposit to a prospective or
+eventual withdrawal, even before it is spent. Public pool-wide log filters
+do not remove that linkage. Current queries preserve these validation checks;
+they are not private information-retrieval or unlinkable queries.
+
 `Tornado/Cli/History.lean` implements the read-only `history` and `compliance report` surfaces. The CLI selects one note from a protected backup, computes its commitment and nullifier hash locally, verifies the selected pool against the pinned catalog/bootstrap, and reconstructs that pool through bounded Saga/RPC history. It then asks the same configured RPC for the captured block's `isSpent` result, re-reads the **whole selected pool's logs at each selected event block**, and binds the exact event fields and global log index to a successful receipt and block hash. A final captured-head hash read detects a changed RPC view during the report.
 
 The `eth_getLogs` filter contains only the public pool address and exact block range. It never contains the note commitment or nullifier. The `isSpent(bytes32)` `eth_call` **does send the selected note's nullifier hash to the configured RPC**. This matches the pinned TypeScript command and should be disclosed to users choosing a third-party RPC. The command never prints the note or preimage. `history` prints only pool, deposit, spent status and optional withdrawal information. `compliance report` writes a redacted JSON report through exclusive protected-file creation; the unspent nullifier hash is withheld from that file. The report still links a deposit to the operator, so it is stored with mode 0600.

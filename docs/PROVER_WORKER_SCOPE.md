@@ -22,6 +22,34 @@ derived private key. Batch owner keys instead use the protected native
 libsecp256k1 key-file boundary. The child signer is still variable-time Lean
 cryptography, without a constant-time or complete-erasure guarantee.
 
+## Restricted program and release proofs
+
+The actual dispatcher constructs
+[`WorkerProgram.Program`](../Tornado/Runtime/WorkerProgram.lean), whose effects
+are configured note/request reads, three fixed asset slots and explicit
+32-byte entropy draws. Request reads require sign/prove mode; asset and
+entropy access require prove mode. The native interpreter attempts core-dump
+suppression before input access and stops if it fails. Public request reads
+are capped at 4,096 bytes; compressed circuit/key and witness-graph slots are
+capped at 4/32/16 MiB respectively. The private note uses the protected reader.
+There is no network, file-write, arbitrary-path or logging operation in the
+program, and no unrestricted prover IO callback.
+
+[`WorkerDisclosure`](../Tornado/Spec/WorkerDisclosure.lean) kernel-checks those
+capability restrictions and the terminal gate: one canonical typed response
+line with no embedded CR/LF or one fixed failure diagnostic. Proof/signature
+release rechecks request binding. Injected read/entropy/protection failures
+and actual oversized input paths have focused tests; the real-child public
+fixture exercises the refactored prover.
+
+These statements concern enumerated capabilities and requested output. They
+do not prove absence of secrets covertly encoded into permitted proof,
+signature or metadata fields. Secret-dependent success/failure, timing,
+resource use, partial OS output, crashes and memory remnants are outside the
+claim. The interpreter and installed executable remain trusted. The configured
+history RPC can associate selected deposit receipt and nullifier-spent queries;
+this worker boundary does not hide that parent-side linkage.
+
 ## Experimental and production limits
 
 - The child handles spendable note bytes, witness values, FFT/MSM intermediates, blinding scalars and note-derived signer secrets in Lean-managed memory. Its arithmetic is variable time and these copies are not reliably erased. A separate process shortens their lifetime but is **not** an audited constant-time or zeroizing prover boundary. `--experimental-send` does not change these limitations.
@@ -31,7 +59,9 @@ cryptography, without a constant-time or complete-erasure guarantee.
 - The worker executable, note-file path, asset directory, OS process isolation, filesystem, entropy source, compiler, Lean runtime, and verifier implementation remain trusted. A fatal runtime crash can bypass sanitized error handling; process termination is not a proof of complete secret erasure.
 - The worker itself does not submit transactions or proofs to remote providers. Parent adapters own protected journals, exposure marking, final signed simulation, one-shot bundler/relayer submission and status reconciliation. Their injected fault tests do not constitute an end-to-end theorem about real filesystem/network effects.
 
-Secret-safe witness/prover computation and complete effectful withdrawal
-refinement are outside the current verification coverage. Protecting only the
+Secret-safe witness/prover computation and complete physical IO refinement
+are outside the current verification coverage. Sponsored withdrawals use
+a proved command machine, conditional on its callback contracts; this does
+not prove all CLI routes or durable OS effects. Protecting only the
 final curve arithmetic would leave note, witness and intermediate copies in
 Lean memory; the complete secret-bearing computation is relevant to this limit.

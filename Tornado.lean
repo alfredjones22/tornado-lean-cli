@@ -83,3 +83,7 @@ import Tornado.Compression.Gzip
 import Tornado.Spec.Refinement
 import Tornado.Spec.EffectRefinement
 import Tornado.Spec.JournalIORefinement
+import Tornado.Protocol.DirectWithdrawalIntent
+import Tornado.Spec.WorkerDisclosure
+import Tornado.Spec.WithdrawalDriverProofs
+import Tornado.Spec.BlindingBounds

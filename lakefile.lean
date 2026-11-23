@@ -130,3 +130,6 @@ lean_exe protected_replace_test where
 
 lean_exe relayer_submit_test where
   root := `tests.RelayerSubmit
+
+lean_exe worker_disclosure_test where
+  root := `tests.WorkerDisclosure

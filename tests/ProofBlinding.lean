@@ -61,6 +61,17 @@ def main : IO UInt32 := do
     require (r.value == 1 && s.value == 2 && (← calls.get) == 2)
       "Blinding scalars did not use separate 32-byte reads."
 
+    let pairCalls ← IO.mkRef (0 : Nat)
+    let staggered : Nat → IO ByteArray := fun count => do
+      require (count == 32) "Pair retry changed the entropy-read width."
+      let index ← pairCalls.get
+      pairCalls.set (index + 1)
+      if index >= 4 then throw <| IO.userError "Unexpected prefetched entropy"
+      return word (if index == 1 then 1 else if index == 3 then 2 else 0)
+    let (first, second) ← samplePairWith staggered
+    require (first.value == 1 && second.value == 2 && (← pairCalls.get) == 4)
+      "Sequential samplers did not resume at the next unread draw after rejection."
+
     let attempts ← IO.mkRef (0 : Nat)
     let retryReads : Nat → IO ByteArray := fun count => do
       require (count == 32) "Retry did not request 32 bytes."

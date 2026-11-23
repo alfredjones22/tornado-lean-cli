@@ -10,6 +10,19 @@ The theorems below import native Lean definitions. `lake build Tornado` kernel-c
 
 ## Native policy
 
+The [withdrawal security specification](WITHDRAWAL_SECURITY_SPEC.md) describes
+the rules in user-facing terms. `Runtime/WithdrawalDriver.lean` is the actual
+machine used by `Cli/WithdrawalSend.executeWith`, including approval, clock
+checks, revalidation, signing, reservation, exposure marking, optional final
+simulation and submission. `Spec/WithdrawalDriverProofs.lean` proves its
+dispatch guards, terminal uncertainty behavior and full payload bindings.
+`PreparedReview` carries an equality to the actual builder result;
+`FinalPayload` permits only a signature change and binds the separate EIP-7702
+authorization plus the complete serialized bytes. Callback contracts,
+including all-selected-path durable reservation, and native IO remain trusted.
+This is a command-machine refinement for sponsored withdrawals, not a theorem
+covering every command, physical effect, crash or restart.
+
 `PolicyProofs.lean` proves that simulation admission has the reviewed normalized UserOperation hash and the source's upper age bound, and that an explicit failed result cannot pass. The source age predicate has no lower bound, so a future timestamp can pass; the theorem preserves that behavior rather than silently strengthening it.
 
 The relayer fee theorems prove that a returned result passed the selected amount/cap guards, its fields equal the native arithmetic, and `net + fee = amount`. Proof, pool, endpoint, relayer registration, and HTTP response validation are absent, so this is not a full relayer withdrawal theorem.
@@ -48,7 +61,23 @@ The pinned CLI and SDK catalogs list pool addresses and denominations but no exp
 
 `Protocol/ClassicProofPipeline.lean` composes authenticated compressed assets, the complete checked witness, proof assembly, serialization, and compiled-key public verification. Its returned runtime object contains only public bytes and signals; the secret-bearing checked artifact exists in an erased proposition. Eight theorems bind the public result to reviewed signals and the executable witness, encoding, and verification gates. One unfunded public fixture matches the pinned SDK's exact 256 proof bytes. This does not prove Groth16 arithmetic or soundness for every input, secret-safe computation, or a deployed pool's verifier identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
 
-`Runtime/ProofBlinding.lean` samples nonzero canonical Fr values by bounded rejection from independent kernel CSPRNG reads. Its theorem proves the accepted candidate's 32-byte shape and field range, assuming the entropy callback returned those bytes. The internal `Cli/WithdrawProof.lean` reference builder and connected isolated prover use the sampler. The theorem does not prove randomness, independence, constant-time behavior, or zeroization; see [sampler scope](PROOF_BLINDING_SCOPE.md).
+`Runtime/ProofBlinding.lean` samples nonzero canonical Fr values by bounded rejection from kernel CSPRNG reads. Its admission theorem proves the accepted candidate's 32-byte shape and field range. `Spec/BlindingDistribution.lean`, `Spec/BlindingPair.lean` and `Spec/BlindingBounds.lean` give finite counting proofs for the shared bounded loop, conditional on IID uniform decoded 256-bit candidates. These do not prove OS entropy, full prover zero knowledge, secret-independent later failures, constant-time behavior or zeroization; see [sampler scope](PROOF_BLINDING_SCOPE.md).
+
+`Runtime/WorkerProgram.lean` is the restricted effect language interpreted by
+the actual worker entry point. `Spec/WorkerDisclosure.lean` proves mode-specific
+read/entropy confinement, protection-first trace structure and the canonical
+typed output or constant-failure envelope, including request binding at
+release. No unrestricted IO prover callback is hidden in the program. The
+interpreter, OS and opaque cryptographic output contents are trust boundaries.
+These are capability and format claims, not absence of covert channels or a
+zero-knowledge theorem. See [worker scope](PROVER_WORKER_SCOPE.md).
+
+`Protocol/DirectWithdrawalIntent.lean` is an executable gate in the direct
+sponsored builder. Five theorems bind its decoded pool/recipient/fee and other
+reviewed fields, exclude direct execution calls, and prove canonical sponsor
+bytes by the decoder/re-encoder theorem. Twenty-two synthetic mutations
+exercise rejection of changed sponsor or operation fields. Neither this gate
+nor its tests prove contract semantics or crypto security.
 
 `Policy/EvidenceBridge.lean` composes the strict event decoder with the one-note and batch policy confirmation transitions. Its two theorems prove that an accepted bridge confirmation has exact decoded event evidence, a matching signed operation hash, the selected batch nullifiers where applicable, and an accepted native policy transition. The bridge still receives receipt status, logs, expected fields, and policy state from its caller; no RPC authenticity, finality, or durable state reachability is proved.
 

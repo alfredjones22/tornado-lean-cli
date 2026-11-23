@@ -1,4 +1,5 @@
 import Tornado.Protocol.SponsoredWithdrawal
+import Tornado.Runtime.WithdrawalDriver
 
 /-! Effect-injected experimental sponsored withdrawal runner. It connects
 proof/payout validation, final approval, one signature, durable reservation,
@@ -44,10 +45,7 @@ def build (review : Review) : Except String UserOperation := do
       throw "Batch owner differs from the recoverable account."
     SponsoredWithdrawal.batch review.notes account receiver calls review.gas review.bounds
 
-structure Signed where
-  owner : Nat
-  signature : ByteArray
-  authorization : Option Bundler.Authorization := none
+abbrev Signed := WithdrawalDriver.Signed
 
 structure Effects where
   rpc : JsonRpc.Method → Array Json → IO Json
@@ -60,16 +58,6 @@ structure Effects where
   markUnknown : ByteArray → IO Unit
   simulate : UserOperation → IO Bool
   nowMs : IO Nat
-
-private def validateSignature (signature : ByteArray) : Except String Unit := do
-  if signature.size != 65 then throw "Invalid owner signature length."
-  let word (start : Nat) := (signature.extract start (start + 32)).data.foldl
-    (fun n b => n * 256 + b.toNat) 0
-  let r := word 0
-  let s := word 32
-  if r == 0 || r >= secp256k1Order || s == 0 || s > secp256k1Order / 2 ||
-      (signature[64]! != 27 && signature[64]! != 28) then
-    throw "Owner signature is not canonical Ethereum ECDSA."
 
 def reviewText (review : Review) (op : UserOperation) (hash : ByteArray) :
     Except String String := do
@@ -98,57 +86,46 @@ def reviewText (review : Review) (op : UserOperation) (hash : ByteArray) :
   lines := lines ++ [s!"Operation hash: {Bundler.dataHex hash}"]
   return String.intercalate "\n" lines
 
-/-- All potentially executable bytes are reserved before any signed simulation
-or send. A failed simulation remains unknown because its RPC may have relayed
-the signed operation. Revalidation must establish live root, spent, account,
-nonce and chain policy; no HTTP reply authenticates itself. -/
+/-- Carries the actual builder equality into the runtime command machine. -/
+structure PreparedReview (review : Review) where
+  private mk ::
+  operation : UserOperation
+  built : build review = .ok operation
+  driver : WithdrawalDriver.ReviewedOperation operation
+
+def prepareReview (review : Review) : Except String (PreparedReview review) := do
+  match built : build review with
+  | .error message => throw message
+  | .ok operation =>
+    let chainId := review.notes[0]!.request.chainId
+    let hash ← userOperationHash chainId Bundler.entryPoint operation
+    let text ← reviewText review operation hash
+    let selected := review.notes.map fun note =>
+      (⟨note.request.pool, note.request.nullifierHash⟩ : WithdrawalDriver.NoteId)
+    let flow := match review.mode with
+      | .single .. => WithdrawalDriver.Flow.direct
+      | .batch .. => WithdrawalDriver.Flow.batch
+    let driver ← WithdrawalDriver.prepareReviewed chainId review.owner operation selected flow
+      review.preparedAtMs text review.bounds
+    return ⟨operation, built, driver⟩
+
+/-- Approval, revalidation, signing, reservation and every exposure callback
+are dispatched by the same finite command machine checked by the driver proofs.
+The protected reserve callback acknowledges all selected note paths together;
+the filesystem, signer and chain-response contracts remain external assumptions. -/
 def executeWith (effects : Effects) (review : Review) : IO Bundler.Outcome := do
-  let op ← checked (build review)
-  let chainId := review.notes[0]!.request.chainId
-  let hash ← checked (userOperationHash chainId Bundler.entryPoint op)
-  effects.approve (← checked (reviewText review op hash))
-  let now ← effects.nowMs
-  if now < review.preparedAtMs || now - review.preparedAtMs > 300000 then
-    throw <| IO.userError "Withdrawal quote expired; no operation was signed."
-  effects.revalidate review
-  let beforeSign ← effects.nowMs
-  if beforeSign < review.preparedAtMs || beforeSign - review.preparedAtMs > 300000 then
-    throw <| IO.userError "Withdrawal review expired before signing."
-  let result ← effects.signDigest hash
-  if result.owner != review.owner then
-    throw <| IO.userError "Signing key differs from the reviewed withdrawal owner."
-  let _ ← checked (validateSignature result.signature)
-  match review.mode with
-  | .single .. =>
-    let some auth := result.authorization
-      | throw <| IO.userError "One-note withdrawal is missing its final authorization."
-    if auth.nonce != 0 then
-      throw <| IO.userError "Note-derived sender authorization nonce must be zero."
-    let _ ← checked (Bundler.withAuthorization chainId op (some auth))
-  | .batch .. =>
-    if result.authorization.isSome then
-      throw <| IO.userError "A recoverable account cannot use EIP-7702 authorization."
-  let signed := { op with signature := result.signature }
-  let finalHash ← checked (userOperationHash chainId Bundler.entryPoint signed)
-  if finalHash != hash then
-    throw <| IO.userError "Final signed withdrawal differs from review."
-  let afterSign ← effects.nowMs
-  if afterSign < review.preparedAtMs || afterSign - review.preparedAtMs > 300000 then
-    throw <| IO.userError "Withdrawal review expired during signing; no payload was exposed."
-  let simulate := match review.mode with | .single .. => false | .batch .. => true
-  let bundlerEffects : Bundler.Effects := {
-    rpc := fun method params => do
-      if simulate then
-        unless (← effects.simulate signed) do
-          throw <| IO.userError "Signed simulation rejected the withdrawal."
-      effects.rpc method params
-    reserve := fun reserved bytes => do
-      if reserved != hash then
-        throw <| IO.userError "Reservation hash differs from reviewed withdrawal."
-      effects.reserve review signed hash bytes
+  let prepared ← checked (prepareReview review)
+  let driver := prepared.driver
+  WithdrawalDriver.runWith (reviewed := driver) {
+    approve := effects.approve
+    nowMs := effects.nowMs
+    revalidate := effects.revalidate review
+    signDigest := effects.signDigest
+    reserve := fun payload => effects.reserve review payload.operation driver.hash payload.bytes
     markExposed := effects.markExposed
+    simulate := effects.simulate
+    rpc := effects.rpc
     markSubmitted := effects.markSubmitted
     markUnknown := effects.markUnknown }
-  Bundler.submitWith bundlerEffects chainId signed review.bounds result.authorization
 
 end Tornado.Cli.WithdrawalSend
