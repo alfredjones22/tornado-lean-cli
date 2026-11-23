@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "viemVersion": "2.55.19",
+  "cases": [
+    {
+      "name": "direct_zero",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "0",
+        "callData": "0x",
+        "verificationGasLimit": "0",
+        "callGasLimit": "0",
+        "preVerificationGas": "0",
+        "maxPriorityFeePerGas": "0",
+        "maxFeePerGas": "0",
+        "signature": "0x"
+      },
+      "expected": {
+        "initCode": "0x",
+        "accountGasLimits": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "gasFees": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "paymasterAndData": "0x",
+        "hash": "0xd21542df43ba93717812693c244ad878d8dd287b29ba6b6f5a87cb5d2e74a2c8"
+      }
+    },
+    {
+      "name": "direct_paymaster",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "7",
+        "callData": "0x",
+        "verificationGasLimit": "250000",
+        "callGasLimit": "0",
+        "preVerificationGas": "21000",
+        "maxPriorityFeePerGas": "1000000000",
+        "maxFeePerGas": "2000000000",
+        "signature": "0xdeadbeef",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "2000000",
+        "paymasterPostOpGasLimit": "90000",
+        "paymasterData": "0x1234"
+      },
+      "expected": {
+        "initCode": "0x",
+        "accountGasLimits": "0x0000000000000000000000000003d09000000000000000000000000000000000",
+        "gasFees": "0x0000000000000000000000003b9aca0000000000000000000000000077359400",
+        "paymasterAndData": "0x2222222222222222222222222222222222222222000000000000000000000000001e848000000000000000000000000000015f901234",
+        "hash": "0x1029b045026a6b954a9c4714aba83026e50b0781f788ef81d58b8738c9125ce2"
+      }
+    },
+    {
+      "name": "separate_paymaster_signature",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "7",
+        "callData": "0x",
+        "verificationGasLimit": "250000",
+        "callGasLimit": "0",
+        "preVerificationGas": "21000",
+        "maxPriorityFeePerGas": "1000000000",
+        "maxFeePerGas": "2000000000",
+        "signature": "0xdeadbeef",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "2000000",
+        "paymasterPostOpGasLimit": "90000",
+        "paymasterData": "0x1234",
+        "paymasterSignature": "0x1234"
+      },
+      "expected": {
+        "initCode": "0x",
+        "accountGasLimits": "0x0000000000000000000000000003d09000000000000000000000000000000000",
+        "gasFees": "0x0000000000000000000000003b9aca0000000000000000000000000077359400",
+        "paymasterAndData": "0x2222222222222222222222222222222222222222000000000000000000000000001e848000000000000000000000000000015f90123422e325a297439656",
+        "transportPaymasterAndData": "0x2222222222222222222222222222222222222222000000000000000000000000001e848000000000000000000000000000015f9012341234000222e325a297439656",
+        "hash": "0x9b9455d284e9f56e64e8e579d7fd98471981790e7a3c1df3c2ecf67530725705"
+      }
+    },
+    {
+      "name": "deployed_batch",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "123456",
+        "callData": "0x12345678abcdef",
+        "verificationGasLimit": "1000000",
+        "callGasLimit": "8000000",
+        "preVerificationGas": "99999",
+        "maxPriorityFeePerGas": "3000000000",
+        "maxFeePerGas": "5000000000",
+        "signature": "0x",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "2000000",
+        "paymasterPostOpGasLimit": "90000",
+        "paymasterData": "0xaabbcc"
+      },
+      "expected": {
+        "initCode": "0x",
+        "accountGasLimits": "0x000000000000000000000000000f4240000000000000000000000000007a1200",
+        "gasFees": "0x000000000000000000000000b2d05e000000000000000000000000012a05f200",
+        "paymasterAndData": "0x2222222222222222222222222222222222222222000000000000000000000000001e848000000000000000000000000000015f90aabbcc",
+        "hash": "0x91e179c023bbc286e5e2f21770c10b64ad61e5530818babcf67f411ddd158b8a"
+      }
+    },
+    {
+      "name": "undeployed_factory",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "1",
+        "callData": "0x010203",
+        "verificationGasLimit": "2000000",
+        "callGasLimit": "700000",
+        "preVerificationGas": "60000",
+        "maxPriorityFeePerGas": "17",
+        "maxFeePerGas": "100",
+        "signature": "0x",
+        "factory": "0x3333333333333333333333333333333333333333",
+        "factoryData": "0xabcdef"
+      },
+      "expected": {
+        "initCode": "0x3333333333333333333333333333333333333333abcdef",
+        "accountGasLimits": "0x000000000000000000000000001e8480000000000000000000000000000aae60",
+        "gasFees": "0x0000000000000000000000000000001100000000000000000000000000000064",
+        "paymasterAndData": "0x",
+        "hash": "0xb23950aee18e74ce8da003a15c2b1a090352cb7ee96d2650a7055a973ac3701e"
+      }
+    },
+    {
+      "name": "eip7702_marker_no_auth",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "0",
+        "callData": "0x",
+        "verificationGasLimit": "100",
+        "callGasLimit": "1",
+        "preVerificationGas": "1",
+        "maxPriorityFeePerGas": "1",
+        "maxFeePerGas": "1",
+        "signature": "0x",
+        "factory": "0x7702",
+        "factoryData": "0xabcdef"
+      },
+      "expected": {
+        "initCode": "0x7702000000000000000000000000000000000000",
+        "transportInitCode": "0x7702abcdef",
+        "accountGasLimits": "0x0000000000000000000000000000006400000000000000000000000000000001",
+        "gasFees": "0x0000000000000000000000000000000100000000000000000000000000000001",
+        "paymasterAndData": "0x",
+        "hash": "0x6a3e219d7046515f28fe51faa57ed6adc72c59ae748b05fb8cb084a9746e0200"
+      }
+    },
+    {
+      "name": "eip7702_authorized",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "5",
+        "callData": "0x",
+        "verificationGasLimit": "999",
+        "callGasLimit": "888",
+        "preVerificationGas": "777",
+        "maxPriorityFeePerGas": "6",
+        "maxFeePerGas": "7",
+        "signature": "0x",
+        "factory": "0x7702000000000000000000000000000000000000",
+        "factoryData": "0xabcdef",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "111",
+        "paymasterPostOpGasLimit": "222",
+        "paymasterData": "0x",
+        "authorizationAddress": "0x4444444444444444444444444444444444444444"
+      },
+      "expected": {
+        "initCode": "0x4444444444444444444444444444444444444444abcdef",
+        "transportInitCode": "0x7702000000000000000000000000000000000000abcdef",
+        "accountGasLimits": "0x000000000000000000000000000003e700000000000000000000000000000378",
+        "gasFees": "0x0000000000000000000000000000000600000000000000000000000000000007",
+        "paymasterAndData": "0x22222222222222222222222222222222222222220000000000000000000000000000006f000000000000000000000000000000de",
+        "hash": "0xc25ad6af2d222622e8be0886c0cd3c9f8007d6d9523c84eaec573e995e38364b"
+      }
+    },
+    {
+      "name": "eip7702_short_authorized",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "5",
+        "callData": "0x",
+        "verificationGasLimit": "999",
+        "callGasLimit": "888",
+        "preVerificationGas": "777",
+        "maxPriorityFeePerGas": "6",
+        "maxFeePerGas": "7",
+        "signature": "0x",
+        "factory": "0x7702",
+        "factoryData": "0xabcdef",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "111",
+        "paymasterPostOpGasLimit": "222",
+        "paymasterData": "0x",
+        "authorizationAddress": "0x4444444444444444444444444444444444444444"
+      },
+      "expected": {
+        "initCode": "0x4444444444444444444444444444444444444444abcdef",
+        "transportInitCode": "0x7702abcdef",
+        "accountGasLimits": "0x000000000000000000000000000003e700000000000000000000000000000378",
+        "gasFees": "0x0000000000000000000000000000000600000000000000000000000000000007",
+        "paymasterAndData": "0x22222222222222222222222222222222222222220000000000000000000000000000006f000000000000000000000000000000de",
+        "hash": "0xc25ad6af2d222622e8be0886c0cd3c9f8007d6d9523c84eaec573e995e38364b"
+      }
+    },
+    {
+      "name": "signature_changed",
+      "chainId": 1,
+      "entryPointAddress": "0x0000000071727de22e5e9d8baf0ef2d68c1dde55",
+      "operation": {
+        "sender": "0x1111111111111111111111111111111111111111",
+        "nonce": "7",
+        "callData": "0x",
+        "verificationGasLimit": "250000",
+        "callGasLimit": "0",
+        "preVerificationGas": "21000",
+        "maxPriorityFeePerGas": "1000000000",
+        "maxFeePerGas": "2000000000",
+        "signature": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "paymaster": "0x2222222222222222222222222222222222222222",
+        "paymasterVerificationGasLimit": "2000000",
+        "paymasterPostOpGasLimit": "90000",
+        "paymasterData": "0x1234"
+      },
+      "expected": {
+        "initCode": "0x",
+        "accountGasLimits": "0x0000000000000000000000000003d09000000000000000000000000000000000",
+        "gasFees": "0x0000000000000000000000003b9aca0000000000000000000000000077359400",
+        "paymasterAndData": "0x2222222222222222222222222222222222222222000000000000000000000000001e848000000000000000000000000000015f901234",
+        "hash": "0x1029b045026a6b954a9c4714aba83026e50b0781f788ef81d58b8738c9125ce2"
+      }
+    }
+  ],
+  "signing": {
+    "case": "direct_paymaster",
+    "privateKey": "0x0000000000000000000000000000000000000000000000000000000000000001",
+    "signature": "0x93af3f443d6e354f5a580a9c6ef9e56127e96d24dc539dec9677ff482bbf9dba5599014d4d6c5e1cb0885bc22256342ff0381b9b2797a4fa5bf3520f5b8df6871b"
+  }
+}

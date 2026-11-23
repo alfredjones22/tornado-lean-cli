@@ -1,0 +1,62 @@
+{
+  "sdkVersion": "0.1.0-alpha.38",
+  "vectors": [
+    {
+      "name": "mainnet-eth-001",
+      "chainId": 1,
+      "denomination": "0.01",
+      "symbol": "ETH",
+      "address": "0x199112Eb461ea7eeC1D75B33343542e1d069B41c",
+      "nullifierKey": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "saltKey": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "uuidEntropy": "000102030405060708090a0b0c0d0e0f",
+      "preimage": "7f4a8141653f07b622a2a00e63a55c63327f7cce3b119dd902c34a10bd00a862458d0b848d2fbb7c15be9038d655092daed6312b6a2dcbda4c370b57e894",
+      "commitment": "0x28f04e4427c72e2288c07e85b421b309e087bdfa69a08f46cf2d4286f96cb3c4",
+      "nullifierHash": "0x2f0c49cdd4d3a5291d881eeca4b869da71d3282a42a73635424936ba21cf0e64",
+      "raw": "tornado-eth-0.01-1-0x7f4a8141653f07b622a2a00e63a55c63327f7cce3b119dd902c34a10bd00a862458d0b848d2fbb7c15be9038d655092daed6312b6a2dcbda4c370b57e894",
+      "depositCall": {
+        "to": "0x199112Eb461ea7eeC1D75B33343542e1d069B41c",
+        "data": "0xb214faa528f04e4427c72e2288c07e85b421b309e087bdfa69a08f46cf2d4286f96cb3c4",
+        "value": "10000000000000000"
+      }
+    },
+    {
+      "name": "mainnet-wbtc-01",
+      "chainId": 1,
+      "denomination": "0.1",
+      "symbol": "WBTC",
+      "address": "0x178169B423a011fff22B9e3F3abeA13414dDD0F1",
+      "nullifierKey": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "saltKey": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "uuidEntropy": "000102030405060708090a0b0c0d0e0f",
+      "preimage": "df44866322afec11f4472cd092ab179ff34bbfc12a671d1922bd03e1a03bc5140d6c0115cc90712f03f9769815ff4b9a33dc4f98de8bb05cf77632cbe681",
+      "commitment": "0x041430c890e1537562771a3250db8c57024f3697e70dc7ab43076fe9bf632312",
+      "nullifierHash": "0x16af9669493621491cc25fc9090ecd384b23c9fd769c18c8ed03dbb0f03bef31",
+      "raw": "tornado-wbtc-0.1-1-0xdf44866322afec11f4472cd092ab179ff34bbfc12a671d1922bd03e1a03bc5140d6c0115cc90712f03f9769815ff4b9a33dc4f98de8bb05cf77632cbe681",
+      "depositCall": {
+        "to": "0x178169B423a011fff22B9e3F3abeA13414dDD0F1",
+        "data": "0xb214faa5041430c890e1537562771a3250db8c57024f3697e70dc7ab43076fe9bf632312",
+        "value": "0"
+      }
+    },
+    {
+      "name": "sepolia-eth-1",
+      "chainId": 11155111,
+      "denomination": "1",
+      "symbol": "ETH",
+      "address": "0x8cc930096B4Df705A007c4A039BDFA1320Ed2508",
+      "nullifierKey": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "saltKey": "0x0101010101010101010101010101010101010101010101010101010101010101",
+      "uuidEntropy": "000102030405060708090a0b0c0d0e0f",
+      "preimage": "6c1a6259c1963686149682da4970ee0d7e4c99dc0a100a518331166bce45aabd72712b18c14ac1fbc659c3e6b6ea7ce4db9358033db4c8b3c449096cc975",
+      "commitment": "0x24ef7c4bc8b062e16dd702b2523899a425b8c4f432411ce26b8ed644f686cd45",
+      "nullifierHash": "0x0d5852dbd33ea0e2df5b4ba43e97a7f7922ea70b527f31ccf023bee03ce5581b",
+      "raw": "tornado-eth-1-11155111-0x6c1a6259c1963686149682da4970ee0d7e4c99dc0a100a518331166bce45aabd72712b18c14ac1fbc659c3e6b6ea7ce4db9358033db4c8b3c449096cc975",
+      "depositCall": {
+        "to": "0x8cc930096B4Df705A007c4A039BDFA1320Ed2508",
+        "data": "0xb214faa524ef7c4bc8b062e16dd702b2523899a425b8c4f432411ce26b8ed644f686cd45",
+        "value": "1000000000000000000"
+      }
+    }
+  ]
+}

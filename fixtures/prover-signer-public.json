@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Offline viem 2.55.19 privateKeyToAccount/sign and viem/utils hashAuthorization; alpha.38 deriveLegacyEphemeralSigner formula; synthetic unfunded repeated-0x11 Classic note. No RPC or transaction was used.",
+  "note": "tornado-eth-0.01-1-0x1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+  "sender": "0xAE9A0A49fA3Fe575073E7972abC87FC8067eB6a5",
+  "publicKey": "0x04ed9e51494db8ba061ca38863fe32d28c5f1d3f514028cbae25e9b3ebc346f96e0536b13bdb3127e1e12d49e955b9d19996d8e24c648123168c6bea0f5018b694",
+  "operationHash": "0x94172cf5b572d67eac91fa789759060c8373eec696a44cfa43648c72d2769698",
+  "authorizationHash": "0x5ff19acadaf683f545b800216672c273bcb8563df38a3f451ad080f8b936979b",
+  "operationSignature": "0x24d84ec583a55cde190a532e9ca24e3fddec67d0d9cc38d7796902f5c7cfc62264635fb168dcc2664cbda81943fa6a236489e8854719543807a38affaa2659d41c",
+  "authorizationSignature": "0xae4e6d9605b5c9e8cb3c39e5f60d22fb3c86c355b7550ffd52408a388964d44d2a02cf0c5982ea2b77402395553b57eed980d3f5fce4b7d1ba80c1a52245c6081c"
+}

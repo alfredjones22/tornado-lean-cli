@@ -1,0 +1,1631 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "pools-mainnet-default",
+      "args": [
+        "pools"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-eth",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-eth-lowercase",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "eth"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-dai",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-usdc",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "USDC"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-usdt",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "USDT"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-mainnet-wbtc",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "WBTC"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-sepolia-eth",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-sepolia-dai",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "pools-unsupported-chain",
+      "args": [
+        "pools",
+        "--chain",
+        "5"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "pools-unsupported-asset",
+      "args": [
+        "pools",
+        "--asset",
+        "XYZ"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "pools-unavailable-asset",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111",
+        "--asset",
+        "USDC"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-mainnet-0.13",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "1",
+        "--asset",
+        "ETH",
+        "--amount",
+        "0.13"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-mainnet-1.4",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "1",
+        "--asset",
+        "ETH",
+        "--amount",
+        "1.4"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-sepolia-0.13",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "11155111",
+        "--asset",
+        "ETH",
+        "--amount",
+        "0.13"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-mainnet-0.1",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-mainnet-exclude-3",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "3.5",
+        "--exclude",
+        "3"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-mainnet-usdc",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "USDC",
+        "--amount",
+        "200"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "plan-unsupported-chain",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "5",
+        "--amount",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-unavailable-asset",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "11155111",
+        "--asset",
+        "USDC",
+        "--amount",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-zero",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-negative",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "-1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-scientific",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1e2"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-too-precise",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "USDC",
+        "--amount",
+        "1.0000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-invalid-exclusion",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.123"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "plan-no-exact-after-exclusion",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.02",
+        "--exclude",
+        "0.01"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-01",
+      "args": [
+        "pools",
+        "--chain",
+        "01"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-02",
+      "args": [
+        "pools",
+        "--chain",
+        "1.0"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-03",
+      "args": [
+        "pools",
+        "--chain",
+        "1e0"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-04",
+      "args": [
+        "pools",
+        "--chain",
+        "0x1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-05",
+      "args": [
+        "pools",
+        "--chain",
+        " 1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-06",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111.0",
+        "--asset",
+        "eth"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-07",
+      "args": [
+        "pools",
+        "--chain",
+        "NaN"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-08",
+      "args": [
+        "pools",
+        "--chain",
+        ""
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-09",
+      "args": [
+        "pools",
+        "--chain"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-10",
+      "args": [
+        "pools",
+        "--asset"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-11",
+      "args": [
+        "pools",
+        "--asset",
+        "ETH",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-12",
+      "args": [
+        "pools",
+        "--chain",
+        "1",
+        "--asset",
+        "EtH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-13",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111",
+        "--asset",
+        "wbtc"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-14",
+      "args": [
+        "pools",
+        "--bogus"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-15",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        " 1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-16",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        " 1　"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-17",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "+1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-18",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "01"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-19",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1."
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-20",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        ".1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-21",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.000000000000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-22",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1e0"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-23",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0x1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-24",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "3.5",
+        "--exclude",
+        "3",
+        "0.3"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-25",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1.4",
+        "--exclude",
+        "0.3",
+        "0.03"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-26",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1.4",
+        "--exclude",
+        "0.3",
+        "--exclude",
+        "0.03"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-27",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1.4",
+        "--exclude",
+        "3",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-28",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1.4",
+        "--exclude"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-29",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-30",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "-1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-31",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--chain",
+        "1.0"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-32",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "200",
+        "--asset",
+        "usdc"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-33",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "200",
+        "--asset",
+        "USDC",
+        "--exclude",
+        "100"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-34",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "200",
+        "--asset",
+        "USDC",
+        "--exclude",
+        "100.0"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-35",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "200",
+        "--asset",
+        "USDC",
+        "--exclude",
+        "100.0000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-36",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.02",
+        "--exclude",
+        "0.01"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-37",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "DAI",
+        "--amount",
+        "10000"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-38",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "WBTC",
+        "--amount",
+        "0.2"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "edge-39",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "WBTC",
+        "--amount",
+        "0.000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-40",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "extra"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "edge-41",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--bogus"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-01",
+      "args": [
+        "pools",
+        "--chain",
+        "1.0000000000000001"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-02",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111.0000000001"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-03",
+      "args": [
+        "pools",
+        "--chain",
+        "1.00000000000000001"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-04",
+      "args": [
+        "pools",
+        "--chain",
+        "1e-324"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-05",
+      "args": [
+        "pools",
+        "--chain",
+        "1e0"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-06",
+      "args": [
+        "pools",
+        "--chain",
+        "0x1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-07",
+      "args": [
+        "pools",
+        "--chain",
+        "0x00000000000001"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-08",
+      "args": [
+        "pools",
+        "--chain",
+        "+1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-09",
+      "args": [
+        "pools",
+        "--chain",
+        "-0"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-10",
+      "args": [
+        "pools",
+        "--chain",
+        " 1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-11",
+      "args": [
+        "pools",
+        "--chain",
+        " 1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-12",
+      "args": [
+        "pools",
+        "--chain",
+        "1e999"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-13",
+      "args": [
+        "pools",
+        "--chain",
+        "  "
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-14",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1.0000000000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-15",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.10000000000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-16",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.000000000000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-17",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1e0"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-18",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        ".1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-19",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1."
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-20",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-21",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-22",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        " 1 "
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-23",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "11111111111111111111111111111111111111111111111111111111111111111"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-24",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "0.1\n"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-25",
+      "args": [
+        "pools",
+        "--asset",
+        "ETH",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-26",
+      "args": [
+        "pools",
+        "--chain",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-27",
+      "args": [
+        "pools",
+        "--",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-28",
+      "args": [
+        "pools",
+        "-h"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-29",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "0.3",
+        "--exclude",
+        "3"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-30",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "-0.1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-31",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--chain=1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-32",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount=1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "review-33",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        ""
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-34",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1,0.3"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "review-35",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.10"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-01",
+      "args": [
+        "pools",
+        "--chain",
+        "1.0000000000000002"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-02",
+      "args": [
+        "pools",
+        "--chain",
+        "0.9999999999999999"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-03",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111.000000001"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-04",
+      "args": [
+        "pools",
+        "--chain",
+        "11155111.000000002"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-05",
+      "args": [
+        "pools",
+        "--chain",
+        "11155110.999999999"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-06",
+      "args": [
+        "pools",
+        "--chain",
+        "1e-325"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-07",
+      "args": [
+        "pools",
+        "--chain",
+        "5e-324"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-08",
+      "args": [
+        "pools",
+        "--chain",
+        "1e-1000"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-09",
+      "args": [
+        "pools",
+        "--chain",
+        "1e1000"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-10",
+      "args": [
+        "pools",
+        "--chain",
+        "01"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-11",
+      "args": [
+        "pools",
+        "--chain",
+        "+01"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-12",
+      "args": [
+        "pools",
+        "--chain",
+        "1."
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-13",
+      "args": [
+        "pools",
+        "--chain",
+        " .1 "
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-14",
+      "args": [
+        "pools",
+        "--chain",
+        "0b1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-15",
+      "args": [
+        "pools",
+        "--chain",
+        "0o1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-16",
+      "args": [
+        "pools",
+        "--chain",
+        "0X1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-17",
+      "args": [
+        "pools",
+        "--asset=ETH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-18",
+      "args": [
+        "pools",
+        "--chain="
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-19",
+      "args": [
+        "pools",
+        "--asset="
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-20",
+      "args": [
+        "pools",
+        "--chain",
+        "--help"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-21",
+      "args": [
+        "pools",
+        "--help",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-22",
+      "args": [
+        "pools",
+        "--asset",
+        "DAI",
+        "--help"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-23",
+      "args": [
+        "pools",
+        "-h",
+        "--asset",
+        "DAI"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-24",
+      "args": [
+        "pools",
+        "--",
+        "--help"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-25",
+      "args": [
+        "pools",
+        "--"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-26",
+      "args": [
+        "pools",
+        "--chain",
+        "--asset"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-27",
+      "args": [
+        "pools",
+        "--chain",
+        "-1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-28",
+      "args": [
+        "pools",
+        "--asset",
+        "--chain",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-29",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount="
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-30",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain="
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-31",
+      "args": [
+        "deposit",
+        "plan",
+        "--exclude="
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-32",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude=0.1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-33",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "-.1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-34",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "-0.1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-35",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "-01"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-36",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "-1e1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-37",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "--chain",
+        "1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-38",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-39",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-40",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "--"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-41",
+      "args": [
+        "deposit",
+        "plan",
+        "--help",
+        "--amount",
+        "1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-42",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--help"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-43",
+      "args": [
+        "deposit",
+        "plan",
+        "-h",
+        "--amount",
+        "1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-44",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "--asset",
+        "ETH"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-45",
+      "args": [
+        "deposit",
+        "plan",
+        "--asset",
+        "--chain",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-46",
+      "args": [
+        "deposit",
+        "plan",
+        "--chain",
+        "--amount",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-47",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--",
+        "--chain",
+        "1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-48",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--amount",
+        "0.1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-49",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--amount=0.1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-50",
+      "args": [
+        "deposit",
+        "plan",
+        "--exclude",
+        "0.1",
+        "--amount",
+        "1"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "adversarial-51",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "-1"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "adversarial-52",
+      "args": [
+        "deposit",
+        "plan",
+        "--amount",
+        "1",
+        "--exclude",
+        "0.1",
+        "-0.3"
+      ],
+      "expect": "failure"
+    },
+    {
+      "name": "root-version-long",
+      "args": [
+        "--version"
+      ],
+      "expect": "success"
+    },
+    {
+      "name": "root-version-short",
+      "args": [
+        "-V"
+      ],
+      "expect": "success"
+    }
+  ]
+}

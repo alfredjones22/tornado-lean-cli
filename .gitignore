@@ -1,0 +1,8 @@
+.lake/
+*.olean
+*.ilean
+*.o
+*.a
+.env
+node_modules/
+reports/

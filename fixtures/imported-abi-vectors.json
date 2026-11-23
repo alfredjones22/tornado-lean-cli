@@ -1,0 +1,5232 @@
+{
+  "sourceCommit": "daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7",
+  "viemVersion": "2.55.19",
+  "sourceCallsSha256": "e21647798481ed8ca775d98b1465ee0652671e7d6d133f41c43f6eba12c1b0cc",
+  "cases": [
+    {
+      "name": "no-arguments",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [],
+            "payable": false
+          },
+          "contractInputsValues": {}
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xc0406226"
+        }
+      ],
+      "callsHash": "0x9fe44968c14a5392f7cf562fa2de64894afb2e58b8060a56195dadf517248d51"
+    },
+    {
+      "name": "transfer",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "transfer",
+            "inputs": [
+              {
+                "name": "to",
+                "type": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "to": "0x0000000000000000000000000000000000000000",
+            "amount": "1000000000000000001"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000de0b6b3a7640001"
+        }
+      ],
+      "callsHash": "0xd2f3a46070558263d240344b71ab017611cef2ab0d8846b8e16a7258cdef151f"
+    },
+    {
+      "name": "aliases-and-safe-numbers",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "a",
+                "type": "uint"
+              },
+              {
+                "name": "b",
+                "type": "int"
+              },
+              {
+                "name": "c",
+                "type": "uint64"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "a": "000001",
+            "b": -42,
+            "c": 9007199254740991
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x50a805650000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd6000000000000000000000000000000000000000000000000001fffffffffffff"
+        }
+      ],
+      "callsHash": "0xe01ba54888401264450451955a617e6bba3f4a66c5afaa19170ed872d71154e8"
+    },
+    {
+      "name": "all-integer-width-boundaries",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "u8",
+                "type": "uint8"
+              },
+              {
+                "name": "i8",
+                "type": "int8"
+              },
+              {
+                "name": "u16",
+                "type": "uint16"
+              },
+              {
+                "name": "i16",
+                "type": "int16"
+              },
+              {
+                "name": "u24",
+                "type": "uint24"
+              },
+              {
+                "name": "i24",
+                "type": "int24"
+              },
+              {
+                "name": "u32",
+                "type": "uint32"
+              },
+              {
+                "name": "i32",
+                "type": "int32"
+              },
+              {
+                "name": "u40",
+                "type": "uint40"
+              },
+              {
+                "name": "i40",
+                "type": "int40"
+              },
+              {
+                "name": "u48",
+                "type": "uint48"
+              },
+              {
+                "name": "i48",
+                "type": "int48"
+              },
+              {
+                "name": "u56",
+                "type": "uint56"
+              },
+              {
+                "name": "i56",
+                "type": "int56"
+              },
+              {
+                "name": "u64",
+                "type": "uint64"
+              },
+              {
+                "name": "i64",
+                "type": "int64"
+              },
+              {
+                "name": "u72",
+                "type": "uint72"
+              },
+              {
+                "name": "i72",
+                "type": "int72"
+              },
+              {
+                "name": "u80",
+                "type": "uint80"
+              },
+              {
+                "name": "i80",
+                "type": "int80"
+              },
+              {
+                "name": "u88",
+                "type": "uint88"
+              },
+              {
+                "name": "i88",
+                "type": "int88"
+              },
+              {
+                "name": "u96",
+                "type": "uint96"
+              },
+              {
+                "name": "i96",
+                "type": "int96"
+              },
+              {
+                "name": "u104",
+                "type": "uint104"
+              },
+              {
+                "name": "i104",
+                "type": "int104"
+              },
+              {
+                "name": "u112",
+                "type": "uint112"
+              },
+              {
+                "name": "i112",
+                "type": "int112"
+              },
+              {
+                "name": "u120",
+                "type": "uint120"
+              },
+              {
+                "name": "i120",
+                "type": "int120"
+              },
+              {
+                "name": "u128",
+                "type": "uint128"
+              },
+              {
+                "name": "i128",
+                "type": "int128"
+              },
+              {
+                "name": "u136",
+                "type": "uint136"
+              },
+              {
+                "name": "i136",
+                "type": "int136"
+              },
+              {
+                "name": "u144",
+                "type": "uint144"
+              },
+              {
+                "name": "i144",
+                "type": "int144"
+              },
+              {
+                "name": "u152",
+                "type": "uint152"
+              },
+              {
+                "name": "i152",
+                "type": "int152"
+              },
+              {
+                "name": "u160",
+                "type": "uint160"
+              },
+              {
+                "name": "i160",
+                "type": "int160"
+              },
+              {
+                "name": "u168",
+                "type": "uint168"
+              },
+              {
+                "name": "i168",
+                "type": "int168"
+              },
+              {
+                "name": "u176",
+                "type": "uint176"
+              },
+              {
+                "name": "i176",
+                "type": "int176"
+              },
+              {
+                "name": "u184",
+                "type": "uint184"
+              },
+              {
+                "name": "i184",
+                "type": "int184"
+              },
+              {
+                "name": "u192",
+                "type": "uint192"
+              },
+              {
+                "name": "i192",
+                "type": "int192"
+              },
+              {
+                "name": "u200",
+                "type": "uint200"
+              },
+              {
+                "name": "i200",
+                "type": "int200"
+              },
+              {
+                "name": "u208",
+                "type": "uint208"
+              },
+              {
+                "name": "i208",
+                "type": "int208"
+              },
+              {
+                "name": "u216",
+                "type": "uint216"
+              },
+              {
+                "name": "i216",
+                "type": "int216"
+              },
+              {
+                "name": "u224",
+                "type": "uint224"
+              },
+              {
+                "name": "i224",
+                "type": "int224"
+              },
+              {
+                "name": "u232",
+                "type": "uint232"
+              },
+              {
+                "name": "i232",
+                "type": "int232"
+              },
+              {
+                "name": "u240",
+                "type": "uint240"
+              },
+              {
+                "name": "i240",
+                "type": "int240"
+              },
+              {
+                "name": "u248",
+                "type": "uint248"
+              },
+              {
+                "name": "i248",
+                "type": "int248"
+              },
+              {
+                "name": "u256",
+                "type": "uint256"
+              },
+              {
+                "name": "i256",
+                "type": "int256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "u8": "255",
+            "i8": "-128",
+            "u16": "65535",
+            "i16": "-32768",
+            "u24": "16777215",
+            "i24": "-8388608",
+            "u32": "4294967295",
+            "i32": "-2147483648",
+            "u40": "1099511627775",
+            "i40": "-549755813888",
+            "u48": "281474976710655",
+            "i48": "-140737488355328",
+            "u56": "72057594037927935",
+            "i56": "-36028797018963968",
+            "u64": "18446744073709551615",
+            "i64": "-9223372036854775808",
+            "u72": "4722366482869645213695",
+            "i72": "-2361183241434822606848",
+            "u80": "1208925819614629174706175",
+            "i80": "-604462909807314587353088",
+            "u88": "309485009821345068724781055",
+            "i88": "-154742504910672534362390528",
+            "u96": "79228162514264337593543950335",
+            "i96": "-39614081257132168796771975168",
+            "u104": "20282409603651670423947251286015",
+            "i104": "-10141204801825835211973625643008",
+            "u112": "5192296858534827628530496329220095",
+            "i112": "-2596148429267413814265248164610048",
+            "u120": "1329227995784915872903807060280344575",
+            "i120": "-664613997892457936451903530140172288",
+            "u128": "340282366920938463463374607431768211455",
+            "i128": "-170141183460469231731687303715884105728",
+            "u136": "87112285931760246646623899502532662132735",
+            "i136": "-43556142965880123323311949751266331066368",
+            "u144": "22300745198530623141535718272648361505980415",
+            "i144": "-11150372599265311570767859136324180752990208",
+            "u152": "5708990770823839524233143877797980545530986495",
+            "i152": "-2854495385411919762116571938898990272765493248",
+            "u160": "1461501637330902918203684832716283019655932542975",
+            "i160": "-730750818665451459101842416358141509827966271488",
+            "u168": "374144419156711147060143317175368453031918731001855",
+            "i168": "-187072209578355573530071658587684226515959365500928",
+            "u176": "95780971304118053647396689196894323976171195136475135",
+            "i176": "-47890485652059026823698344598447161988085597568237568",
+            "u184": "24519928653854221733733552434404946937899825954937634815",
+            "i184": "-12259964326927110866866776217202473468949912977468817408",
+            "u192": "6277101735386680763835789423207666416102355444464034512895",
+            "i192": "-3138550867693340381917894711603833208051177722232017256448",
+            "u200": "1606938044258990275541962092341162602522202993782792835301375",
+            "i200": "-803469022129495137770981046170581301261101496891396417650688",
+            "u208": "411376139330301510538742295639337626245683966408394965837152255",
+            "i208": "-205688069665150755269371147819668813122841983204197482918576128",
+            "u216": "105312291668557186697918027683670432318895095400549111254310977535",
+            "i216": "-52656145834278593348959013841835216159447547700274555627155488768",
+            "u224": "26959946667150639794667015087019630673637144422540572481103610249215",
+            "i224": "-13479973333575319897333507543509815336818572211270286240551805124608",
+            "u232": "6901746346790563787434755862277025452451108972170386555162524223799295",
+            "i232": "-3450873173395281893717377931138512726225554486085193277581262111899648",
+            "u240": "1766847064778384329583297500742918515827483896875618958121606201292619775",
+            "i240": "-883423532389192164791648750371459257913741948437809479060803100646309888",
+            "u248": "452312848583266388373324160190187140051835877600158453279131187530910662655",
+            "i248": "-226156424291633194186662080095093570025917938800079226639565593765455331328",
+            "u256": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "i256": "-57896044618658097711785492504343953926634992332820282019728792003956564819968"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xc4e0590a00000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x4981ae7d776e0b8837c9c8ebab750e011325e0557e0c9737c83d73061a8727e0"
+    },
+    {
+      "name": "all-fixed-byte-widths",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "b1",
+                "type": "bytes1"
+              },
+              {
+                "name": "b2",
+                "type": "bytes2"
+              },
+              {
+                "name": "b3",
+                "type": "bytes3"
+              },
+              {
+                "name": "b4",
+                "type": "bytes4"
+              },
+              {
+                "name": "b5",
+                "type": "bytes5"
+              },
+              {
+                "name": "b6",
+                "type": "bytes6"
+              },
+              {
+                "name": "b7",
+                "type": "bytes7"
+              },
+              {
+                "name": "b8",
+                "type": "bytes8"
+              },
+              {
+                "name": "b9",
+                "type": "bytes9"
+              },
+              {
+                "name": "b10",
+                "type": "bytes10"
+              },
+              {
+                "name": "b11",
+                "type": "bytes11"
+              },
+              {
+                "name": "b12",
+                "type": "bytes12"
+              },
+              {
+                "name": "b13",
+                "type": "bytes13"
+              },
+              {
+                "name": "b14",
+                "type": "bytes14"
+              },
+              {
+                "name": "b15",
+                "type": "bytes15"
+              },
+              {
+                "name": "b16",
+                "type": "bytes16"
+              },
+              {
+                "name": "b17",
+                "type": "bytes17"
+              },
+              {
+                "name": "b18",
+                "type": "bytes18"
+              },
+              {
+                "name": "b19",
+                "type": "bytes19"
+              },
+              {
+                "name": "b20",
+                "type": "bytes20"
+              },
+              {
+                "name": "b21",
+                "type": "bytes21"
+              },
+              {
+                "name": "b22",
+                "type": "bytes22"
+              },
+              {
+                "name": "b23",
+                "type": "bytes23"
+              },
+              {
+                "name": "b24",
+                "type": "bytes24"
+              },
+              {
+                "name": "b25",
+                "type": "bytes25"
+              },
+              {
+                "name": "b26",
+                "type": "bytes26"
+              },
+              {
+                "name": "b27",
+                "type": "bytes27"
+              },
+              {
+                "name": "b28",
+                "type": "bytes28"
+              },
+              {
+                "name": "b29",
+                "type": "bytes29"
+              },
+              {
+                "name": "b30",
+                "type": "bytes30"
+              },
+              {
+                "name": "b31",
+                "type": "bytes31"
+              },
+              {
+                "name": "b32",
+                "type": "bytes32"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "b1": "0xab",
+            "b2": "0xabab",
+            "b3": "0xababab",
+            "b4": "0xabababab",
+            "b5": "0xababababab",
+            "b6": "0xabababababab",
+            "b7": "0xababababababab",
+            "b8": "0xabababababababab",
+            "b9": "0xababababababababab",
+            "b10": "0xabababababababababab",
+            "b11": "0xababababababababababab",
+            "b12": "0xabababababababababababab",
+            "b13": "0xababababababababababababab",
+            "b14": "0xabababababababababababababab",
+            "b15": "0xababababababababababababababab",
+            "b16": "0xabababababababababababababababab",
+            "b17": "0xababababababababababababababababab",
+            "b18": "0xabababababababababababababababababab",
+            "b19": "0xababababababababababababababababababab",
+            "b20": "0xabababababababababababababababababababab",
+            "b21": "0xababababababababababababababababababababab",
+            "b22": "0xabababababababababababababababababababababab",
+            "b23": "0xababababababababababababababababababababababab",
+            "b24": "0xabababababababababababababababababababababababab",
+            "b25": "0xababababababababababababababababababababababababab",
+            "b26": "0xabababababababababababababababababababababababababab",
+            "b27": "0xababababababababababababababababababababababababababab",
+            "b28": "0xabababababababababababababababababababababababababababab",
+            "b29": "0xababababababababababababababababababababababababababababab",
+            "b30": "0xabababababababababababababababababababababababababababababab",
+            "b31": "0xababababababababababababababababababababababababababababababab",
+            "b32": "0xabababababababababababababababababababababababababababababababab"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xa1912f50ab00000000000000000000000000000000000000000000000000000000000000abab000000000000000000000000000000000000000000000000000000000000ababab0000000000000000000000000000000000000000000000000000000000abababab00000000000000000000000000000000000000000000000000000000ababababab000000000000000000000000000000000000000000000000000000abababababab0000000000000000000000000000000000000000000000000000ababababababab00000000000000000000000000000000000000000000000000abababababababab000000000000000000000000000000000000000000000000ababababababababab0000000000000000000000000000000000000000000000abababababababababab00000000000000000000000000000000000000000000ababababababababababab000000000000000000000000000000000000000000abababababababababababab0000000000000000000000000000000000000000ababababababababababababab00000000000000000000000000000000000000abababababababababababababab000000000000000000000000000000000000ababababababababababababababab0000000000000000000000000000000000abababababababababababababababab00000000000000000000000000000000ababababababababababababababababab000000000000000000000000000000abababababababababababababababababab0000000000000000000000000000ababababababababababababababababababab00000000000000000000000000abababababababababababababababababababab000000000000000000000000ababababababababababababababababababababab0000000000000000000000abababababababababababababababababababababab00000000000000000000ababababababababababababababababababababababab000000000000000000abababababababababababababababababababababababab0000000000000000ababababababababababababababababababababababababab00000000000000abababababababababababababababababababababababababab000000000000ababababababababababababababababababababababababababab0000000000abababababababababababababababababababababababababababab00000000ababababababababababababababababababababababababababababab000000abababababababababababababababababababababababababababababab0000ababababababababababababababababababababababababababababababab00abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "callsHash": "0x556d7ddc49e37eaef8dc559cc793167eb127124e1edf5f69b620e47ce3d3af90"
+    },
+    {
+      "name": "booleans-and-checksum-address",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "a",
+                "type": "bool"
+              },
+              {
+                "name": "b",
+                "type": "bool"
+              },
+              {
+                "name": "c",
+                "type": "bool"
+              },
+              {
+                "name": "d",
+                "type": "address"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "a": true,
+            "b": "false",
+            "c": false,
+            "d": "0x52908400098527886E0F7030069857D2E4169EE7"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x60b726f200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000052908400098527886e0f7030069857d2e4169ee7"
+        }
+      ],
+      "callsHash": "0xa152956770a9407222ceaf547c97e4ea7e3789361c3d2b07f8c96d0032c0170b"
+    },
+    {
+      "name": "dynamic-bytes-padding",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "empty",
+                "type": "bytes"
+              },
+              {
+                "name": "a",
+                "type": "bytes"
+              },
+              {
+                "name": "b",
+                "type": "bytes"
+              },
+              {
+                "name": "c",
+                "type": "bytes"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "empty": "0x",
+            "a": "0x01010101010101010101010101010101010101010101010101010101010101",
+            "b": "0x0202020202020202020202020202020202020202020202020202020202020202",
+            "c": "0x030303030303030303030303030303030303030303030303030303030303030303"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x7ca930c2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001f010101010101010101010101010101010101010101010101010101010101010000000000000000000000000000000000000000000000000000000000000000200202020202020202020202020202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000002103030303030303030303030303030303030303030303030303030303030303030300000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x2bbc8a700fc7adeff7453c43f23b394eb379d1d726af301cfb8735bc7f01eb51"
+    },
+    {
+      "name": "unicode-strings",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "empty",
+                "type": "string"
+              },
+              {
+                "name": "message",
+                "type": "string"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "empty": "",
+            "message": "Zagreb 🌪️ / Ελληνικά / 日本語"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x450f20e2000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002d5a616772656220f09f8caaefb88f202f20ce95cebbcebbceb7cebdceb9cebaceac202f20e697a5e69cace8aa9e00000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x0fe8c9d5361a5de94314793f1aefc04c69f9c38d65ebc99374136f0c821e32fa"
+    },
+    {
+      "name": "dynamic-integer-array-json",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "uint16[]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": "[0,1,\"65535\"]"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x34d06ab30000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000ffff"
+        }
+      ],
+      "callsHash": "0x444d8f2eca38c18bb3b126844a211aa83a04abd1642b551433dad238963f1a43"
+    },
+    {
+      "name": "fixed-integer-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "int8[3]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              -128,
+              "0",
+              127
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xa34ed835ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007f"
+        }
+      ],
+      "callsHash": "0x17aa601b4583a6e584f08b6ed54fb6aae57794c8c1c88dac62965dcd747d0a75"
+    },
+    {
+      "name": "nested-fixed-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "uint32[2][2]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              [
+                1,
+                2
+              ],
+              [
+                3,
+                4
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x8bea37620000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
+        }
+      ],
+      "callsHash": "0x07151df56a8bfe9acfacdaea29cc8296b7036c6031e9a2d997172d4d9f6c8f66"
+    },
+    {
+      "name": "ragged-dynamic-arrays",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "uint256[][]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              [],
+              [
+                1
+              ],
+              [
+                "2",
+                "3"
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xfcb8f5ca000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003"
+        }
+      ],
+      "callsHash": "0x168108e44f13f48845c1c61900f130101811aaab52457fd25f70761eeec7b9dc"
+    },
+    {
+      "name": "fixed-array-of-dynamic-arrays",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "uint[][2]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              [
+                1,
+                2
+              ],
+              []
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x8f36c3e70000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x0638c4f1c7504f084b2f394f739e3c44bcd6b2d8918f674dd27c5e4223536f9a"
+    },
+    {
+      "name": "dynamic-array-of-fixed-arrays",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "uint[2][]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              [
+                1,
+                2
+              ],
+              [
+                3,
+                4
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x798bb0f0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
+        }
+      ],
+      "callsHash": "0xf536aa7a75b9dcb7f6acea53b34bfeb479b221a48e19da9b172b1353ae4bc637"
+    },
+    {
+      "name": "fixed-array-of-bytes",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "values",
+                "type": "bytes2[2]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "values": [
+              "0xabcd",
+              "0x1234"
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x0f298b7cabcd0000000000000000000000000000000000000000000000000000000000001234000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x0a7c87078b30b7bd3f84ac727c8236d403acacb8b1df00762e408ed868205438"
+    },
+    {
+      "name": "static-tuple-positional",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "config",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "owner",
+                    "type": "address"
+                  },
+                  {
+                    "name": "count",
+                    "type": "uint64"
+                  },
+                  {
+                    "name": "enabled",
+                    "type": "bool"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "config": [
+              "0x52908400098527886E0F7030069857D2E4169EE7",
+              "42",
+              "true"
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x9025bc6e00000000000000000000000052908400098527886e0f7030069857d2e4169ee7000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000001"
+        }
+      ],
+      "callsHash": "0xcdf6b7633288756da5da1a6b243016be1ada8f55960ad30548c615b2857a97b8"
+    },
+    {
+      "name": "static-tuple-named-json",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "config",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "owner",
+                    "type": "address"
+                  },
+                  {
+                    "name": "count",
+                    "type": "uint64"
+                  },
+                  {
+                    "name": "enabled",
+                    "type": "bool"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "config": "{\"owner\":\"0x0000000000000000000000000000000000000000\",\"count\":0,\"enabled\":false}"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x9025bc6e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0xabdf94cb9e90a0dba5701c52d7a50a831537ec7b0f9ce24bec6f17a0baa004b1"
+    },
+    {
+      "name": "dynamic-tuple-named",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "config",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "message",
+                    "type": "string"
+                  },
+                  {
+                    "name": "numbers",
+                    "type": "int16[]"
+                  },
+                  {
+                    "name": "blob",
+                    "type": "bytes"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "config": {
+              "message": "hello",
+              "numbers": [
+                -1,
+                2
+              ],
+              "blob": "0xabcdef"
+            }
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x31f68ca10000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000568656c6c6f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003abcdef0000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x08e570864714cfe15881d243d0e9148776a4afbb188c8a15539a48fae558c2aa"
+    },
+    {
+      "name": "dynamic-tuple-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "rows",
+                "type": "tuple[]",
+                "components": [
+                  {
+                    "name": "message",
+                    "type": "string"
+                  },
+                  {
+                    "name": "numbers",
+                    "type": "int16[]"
+                  },
+                  {
+                    "name": "blob",
+                    "type": "bytes"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "rows": [
+              {
+                "message": "",
+                "numbers": [],
+                "blob": "0x"
+              },
+              [
+                "world",
+                [
+                  3,
+                  -4
+                ],
+                "0x00"
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x5c29987f00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000005776f726c6400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x00aad31094268193d57ddaeba5ee8074dc71ad1ad17b4be672202efd45ce41ac"
+    },
+    {
+      "name": "fixed-dynamic-tuple-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "rows",
+                "type": "tuple[2]",
+                "components": [
+                  {
+                    "name": "message",
+                    "type": "string"
+                  },
+                  {
+                    "name": "numbers",
+                    "type": "int16[]"
+                  },
+                  {
+                    "name": "blob",
+                    "type": "bytes"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "rows": [
+              [
+                "a",
+                [
+                  1
+                ],
+                "0x"
+              ],
+              [
+                "b",
+                [],
+                "0x1234"
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x2ae42c17000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000016100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000016200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x57087932054d4905c24e6972e745b2a1099c7f6b1555eac5140a78c04e07da28"
+    },
+    {
+      "name": "nested-tuples-and-strings",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "root",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "fixed",
+                    "type": "tuple",
+                    "components": [
+                      {
+                        "name": "owner",
+                        "type": "address"
+                      },
+                      {
+                        "name": "count",
+                        "type": "uint64"
+                      },
+                      {
+                        "name": "enabled",
+                        "type": "bool"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "dynamic",
+                    "type": "tuple",
+                    "components": [
+                      {
+                        "name": "message",
+                        "type": "string"
+                      },
+                      {
+                        "name": "numbers",
+                        "type": "int16[]"
+                      },
+                      {
+                        "name": "blob",
+                        "type": "bytes"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "labels",
+                    "type": "string[]"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "root": {
+              "fixed": [
+                "0x0000000000000000000000000000000000000000",
+                "9",
+                true
+              ],
+              "dynamic": [
+                "x",
+                [
+                  -2,
+                  3
+                ],
+                "0xff"
+              ],
+              "labels": [
+                "one",
+                "",
+                "three"
+              ]
+            }
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x816008c6000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe00000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000036f6e650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000057468726565000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0x446a34da27b25d32a1cbcbcd4c10a688c47437524d45b42995ec533dfddde648"
+    },
+    {
+      "name": "empty-compounds",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "a",
+                "type": "uint[]"
+              },
+              {
+                "name": "b",
+                "type": "tuple",
+                "components": []
+              },
+              {
+                "name": "c",
+                "type": "tuple[]",
+                "components": []
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "a": [],
+            "b": [],
+            "c": [
+              [],
+              []
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xc761e8e80000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002"
+        }
+      ],
+      "callsHash": "0x63049e3b11c5d24b7483471edc1cb49c18aa81807a9819c29898b05a78a05301"
+    },
+    {
+      "name": "maximum-sized-empty-tuple-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "rows",
+                "type": "tuple[]",
+                "components": []
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "rows": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x0831862c00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000400"
+        }
+      ],
+      "callsHash": "0x5c8c6f9ea78db901e8f460ddf676c3e0f3abbc0a7f552efe6f5dad8915ac5f0d"
+    },
+    {
+      "name": "near-calldata-byte-bound",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "rows",
+                "type": "uint8[]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "rows": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xc1273d8e000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001fd00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000000000ff"
+        }
+      ],
+      "callsHash": "0x465efb705cd8309be74c5e50797889242d783c9318b98b3d1197be05b7775fce"
+    },
+    {
+      "name": "maximum-nesting-depth",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint[][][][][][][][][][][][]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    "1"
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xd40289550000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001"
+        }
+      ],
+      "callsHash": "0x1ee88a7bee6ac0f0d620b5589e3c0fedac151656654f9dd9e5d82b70ab86ef5b"
+    },
+    {
+      "name": "payable-method",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "1",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "payable": true
+          },
+          "contractInputsValues": {
+            "amount": "5"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "1",
+          "data": "0xa444f5e90000000000000000000000000000000000000000000000000000000000000005"
+        }
+      ],
+      "callsHash": "0x00abc2774f9cad1d7eb511184e0d1b701a8a0fe8141371cd5c5ceef6f0c652b4"
+    },
+    {
+      "name": "matching-provided-calldata",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0XA444F5E90000000000000000000000000000000000000000000000000000000000000007",
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "amount": "7"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0xa444f5e90000000000000000000000000000000000000000000000000000000000000007"
+        }
+      ],
+      "callsHash": "0x60cb78fcf5048d1d4bcdab229c58ed7fea15be419968774d2fd441a184a4ae19"
+    },
+    {
+      "name": "safe-v1-wrapper",
+      "chainId": 11155111,
+      "input": {
+        "version": "1.0",
+        "chainId": "11155111",
+        "transactions": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "value": "0",
+            "data": null,
+            "contractMethod": {
+              "name": "run",
+              "inputs": [
+                {
+                  "name": "value",
+                  "type": "string"
+                }
+              ],
+              "payable": false
+            },
+            "contractInputsValues": {
+              "value": "sepolia"
+            }
+          }
+        ]
+      },
+      "calls": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x9352fad2000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000077365706f6c696100000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "callsHash": "0xe00fb79d7121ee843b4776ac6f803f79fd1d062be0830aa66fee118759363ef2"
+    }
+  ],
+  "rejectionCases": [
+    {
+      "name": "uint-negative",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint8"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint-overflow",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint8"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int-overflow",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "int8"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "128"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int-underflow",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "int8"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "-129"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsafe-number",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": 9007199254740992
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional-number",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": 1.5
+          }
+        }
+      ]
+    },
+    {
+      "name": "hex-integer",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint256"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "0x10"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong-boolean",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "bool"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "TRUE"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed-bytes-size",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "bytes2"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "0xff"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad-address",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "address"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": "0x1234"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong-array-length",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint8[2]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": [
+              1
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "long-array",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint8[]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-missing-component",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "x",
+                    "type": "uint"
+                  }
+                ]
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing-argument",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {}
+        }
+      ]
+    },
+    {
+      "name": "nonpayable-value",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "1",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [],
+            "payable": false
+          },
+          "contractInputsValues": {}
+        }
+      ]
+    },
+    {
+      "name": "calldata-disagreement",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": "0x",
+          "contractMethod": {
+            "name": "run",
+            "inputs": [],
+            "payable": false
+          },
+          "contractInputsValues": {}
+        }
+      ]
+    },
+    {
+      "name": "delegatecall",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [],
+            "payable": false
+          },
+          "contractInputsValues": {},
+          "operation": "1"
+        }
+      ]
+    },
+    {
+      "name": "nested-depth-limit",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "value",
+                "type": "uint[][][][][][][][][][][][][]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "value": [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    [
+                                      "1"
+                                    ]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong-safe-chain",
+      "chainId": 1,
+      "input": {
+        "version": "1.0",
+        "chainId": "11155111",
+        "transactions": [
+          {
+            "to": "0x1111111111111111111111111111111111111111",
+            "value": "0",
+            "data": null,
+            "contractMethod": {
+              "name": "run",
+              "inputs": [],
+              "payable": false
+            },
+            "contractInputsValues": {}
+          }
+        ]
+      }
+    },
+    {
+      "name": "calldata-byte-bound",
+      "chainId": 1,
+      "input": [
+        {
+          "to": "0x1111111111111111111111111111111111111111",
+          "value": "0",
+          "data": null,
+          "contractMethod": {
+            "name": "run",
+            "inputs": [
+              {
+                "name": "rows",
+                "type": "uint8[]"
+              }
+            ],
+            "payable": false
+          },
+          "contractInputsValues": {
+            "rows": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# Native BN254 G2 arithmetic scope
+
+[`BN254G2.lean`](../Tornado/Protocol/BN254G2.lean) implements the quadratic extension field `Fp2` and BN254 twist G2 Jacobian add, double, scalar multiplication, and affine normalization in native Lean. It shares the bounded base-field values from [`BN254G1.lean`](../Tornado/Protocol/BN254G1.lean). Unlike the G1 helper, G2 scalar multiplication does not reduce its scalar modulo the subgroup order, so an order check is meaningful.
+
+[`tests/BN254G2.lean`](../tests/BN254G2.lean) checks 14 public scalar/addition outputs against [pinned noble vectors](../fixtures/bn254-g2-vectors.json), verifies the pinned generator has the expected scalar order, and rejects off-twist, out-of-field, and zero-inverse inputs. [`generate-bn254-g2-vectors.mjs`](../scripts/generate-bn254-g2-vectors.mjs) regenerates those vectors from the pinned TypeScript dependency; `--check` compares them byte for byte. These finite checks do not prove the full group law, subgroup membership of arbitrary decoded points, or equivalence for all inputs.
+
+This module provides G2 arithmetic to the complete isolated Lean prover; pairings, FFT, MSM, blinding and proof assembly live in separate modules. Its bigint operations are variable-time and do not zeroize secrets. Direct vectors and worker integration use public unfunded fixtures. Experimental commands use this implementation without a production secret-safety or side-channel guarantee.

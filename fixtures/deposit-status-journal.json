@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "kind": "deposit",
+  "chainId": 1,
+  "account": "0x52908400098527886E0F7030069857D2E4169EE7",
+  "createdAt": "2026-11-22T00:00:00.000Z",
+  "steps": [
+    {
+      "kind": "deposit",
+      "label": "Deposit 0.01 ETH",
+      "to": "0x199112Eb461ea7eeC1D75B33343542e1d069B41c",
+      "status": "prepared",
+      "pool": "0x199112Eb461ea7eeC1D75B33343542e1d069B41c",
+      "commitment": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "denomination": "0.01",
+      "asset": "ETH",
+      "hash": "0x9797979797979797979797979797979797979797979797979797979797979797"
+    }
+  ]
+}

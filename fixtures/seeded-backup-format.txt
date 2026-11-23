@@ -1,0 +1,23 @@
+------- SEED PHRASE (SECRET) --------
+abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art
+-------------------------------------
+
+-------- NOTES (SECRET) --------
+tornado-eth-0.01-1-0x33567fb6463d588b0ef7ff2d415130e0d91059781005f504671ddc3f03c4adc8b873cfa627a16e46d1f33b81d9c7e86772a083575ccccb9104ed77057b53
+tornado-eth-1-1-0x38ba0d601404fd62799e1f48f412425062db944406ad748338cdf17cc91e1b0e52370aca05d3731e2f6e278d0fb871ecedf5a9de9a20969a636b16acde90
+tornado-eth-0.1-1-0x7f231f55aa7f9ee7656f94a0d9baae11e9c28a8815e20923a5ecaab130e96a554d237a2fc43f77d4bfcb52f00a40ccf6bf1bfb91125e4fa1c313112ba81f
+tornado-eth-1-1-0x1eaa86fc5474b3fadce48de19379918000813797f565fcb6b22352e16da27e11c771a01bf3c6d69be9ae77b33b31639487bea29e0a8389282efa9cedb03a
+--------------------------------
+
+-------- METADATA --------
+Anyone with the seed phrase above can find and control ALL of these Tornado notes.
+Each individual note string is also secret material: anyone with access to it can spend that note.
+
+Note nonces: 0, 1, 2, 3 (in the same order as the notes above).
+
+Exact note derivation reference (Kohaku SDK, fixed commit):
+https://github.com/ethereum/kohaku/blob/886f72ddd6e36d43e53675fc359fd4a315590ee8/packages/tornado-cash/src/account/signature-keys.ts
+
+Seed-to-key implementation (same commit):
+https://github.com/ethereum/kohaku/blob/886f72ddd6e36d43e53675fc359fd4a315590ee8/packages/plugins/src/host/mnemonic-keystore.ts
+--------------------------
