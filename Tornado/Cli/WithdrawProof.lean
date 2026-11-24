@@ -178,7 +178,9 @@ def loadAssets (root : String) : IO ClassicProofPipeline.PinnedAssets := do
   let key ← IO.FS.readBinFile
     (base ++ "/assets/proving/tornadoProvingKey-8e2d2f22beafb5a9.bin.gz")
   let graph ← IO.FS.readFile (base ++ "/fixtures/witness-vm-selected-components.json")
-  checked <| ClassicProofPipeline.loadBundled circuit key graph
+  let witnessCertificate ← IO.FS.readBinFile
+    (base ++ "/assets/proving/tornado-witness-certificate-v1.json.gz")
+  checked <| ClassicProofPipeline.loadBundled circuit key graph witnessCertificate
 
 private def quantityHex (value : Nat) : String :=
   "0x" ++ String.ofList (Nat.toDigits 16 value)

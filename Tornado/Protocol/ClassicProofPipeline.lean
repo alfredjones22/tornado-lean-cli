@@ -1,4 +1,5 @@
 import Lean
+import Tornado.Protocol.PublicWitnessCertificate
 import Tornado.Compression.Gzip
 import Tornado.Protocol.Groth16MSM
 import Tornado.Protocol.ClassicVerifyingKey
@@ -18,6 +19,7 @@ structure PinnedAssets where
   graph : WitnessVM.PinnedGraph
   circuit : WitnessVM.PinnedCircuit
   key : ProvingKey.PinnedKey
+  publicWitness : WitnessSymbolic.CertifiedPublic graph.graph circuit.circuit
 
 structure ReviewedPublic where
   root : Nat
@@ -39,7 +41,7 @@ def ReviewedPublic.signals (reviewed : ReviewedPublic) : Array Nat :=
 /-- Authenticate the exact bundled compressed circuit/key, the complete
     extracted witness graph, and the decoded R1CS before proving. -/
 def loadBundled (compressedCircuit compressedKey : ByteArray)
-    (graphText : String) : Except String PinnedAssets := do
+    (graphText : String) (compressedWitnessCertificate : ByteArray) : Except String PinnedAssets := do
   let pinnedGraph ← WitnessVM.decodePinnedGraph graphText
   let circuitBytes ← Tornado.Compression.Gzip.pinnedCircuit compressedCircuit
   let some circuitText := String.fromUTF8? circuitBytes
@@ -49,7 +51,8 @@ def loadBundled (compressedCircuit compressedKey : ByteArray)
   let pinnedCircuit ← WitnessVM.authenticatePinnedCircuit circuit
   let keyBytes ← Tornado.Compression.Gzip.pinnedProvingKey compressedKey
   let pinnedKey ← ProvingKey.authenticatePinnedKey keyBytes
-  return { graph := pinnedGraph, circuit := pinnedCircuit, key := pinnedKey }
+  let publicWitness ← WitnessSymbolic.loadPublicCertificate pinnedGraph.graph pinnedCircuit.circuit compressedWitnessCertificate
+  return { graph := pinnedGraph, circuit := pinnedCircuit, key := pinnedKey, publicWitness }
 
 /-- Convert the same three proof points that will be serialized to the
     checked public verifier representation. Infinity fails closed. -/

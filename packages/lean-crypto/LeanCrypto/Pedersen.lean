@@ -27,15 +27,15 @@ private def fadd (x y : Nat) : Nat := (x + y) % fieldPrime
 private def fsub (x y : Nat) : Nat := (x + fieldPrime - y % fieldPrime) % fieldPrime
 private def fmul (x y : Nat) : Nat := (x * y) % fieldPrime
 
-private def powMod (base exponent : Nat) : Nat := Id.run do
-  let mut result := 1
-  let mut x := base % fieldPrime
-  let mut n := exponent
-  while n > 0 do
-    if n % 2 == 1 then result := fmul result x
-    x := fmul x x
-    n := n / 2
-  return result
+private def powModLoop (base exponent result : Nat) : Nat :=
+  if zero : exponent = 0 then result
+  else powModLoop (fmul base base) (exponent / 2)
+    (if exponent % 2 == 1 then fmul result base else result)
+termination_by exponent
+decreasing_by exact Nat.div_lt_self (Nat.pos_of_ne_zero zero) (by decide)
+
+private def powMod (base exponent : Nat) : Nat :=
+  powModLoop (base % fieldPrime) exponent 1
 
 private def finv (x : Nat) : Option Nat :=
   if x % fieldPrime == 0 then none
@@ -96,15 +96,15 @@ private def addPoints (p q : ExtendedPoint) : ExtendedPoint :=
   let h := fsub b (fmul curveA a)
   ⟨fmul e f, fmul g h, fmul f g, fmul e h⟩
 
-private def scalarMul (point : ExtendedPoint) (scalar : Nat) : ExtendedPoint := Id.run do
-  let mut result := identity
-  let mut base := point
-  let mut n := scalar
-  while n > 0 do
-    if n % 2 == 1 then result := addPoints result base
-    base := addPoints base base
-    n := n / 2
-  return result
+private def scalarMulLoop (base : ExtendedPoint) (n : Nat) (result : ExtendedPoint) : ExtendedPoint :=
+  if zero : n = 0 then result
+  else scalarMulLoop (addPoints base base) (n / 2)
+    (if n % 2 == 1 then addPoints result base else result)
+termination_by n
+decreasing_by exact Nat.div_lt_self (Nat.pos_of_ne_zero zero) (by decide)
+
+private def scalarMul (point : ExtendedPoint) (scalar : Nat) : ExtendedPoint :=
+  scalarMulLoop point scalar identity
 
 private def affine (point : ExtendedPoint) : Option (Nat × Nat) := do
   let invZ ← finv point.z
@@ -185,9 +185,7 @@ private def chunkScalar (bytes : ByteArray) : Nat := Id.run do
   if signed < 0 then signed := signed + Int.ofNat subgroupOrder
   return signed.toNat
 
-/-- Encode the Pedersen hash point for arbitrary bytes. The note protocol
-    passes exactly 31 bytes for a nullifier hash and 62 for a commitment. -/
-def pedersenHash (input : ByteArray) : Except String ByteArray := do
+private def pedersenPoint (input : ByteArray) : Except String ExtendedPoint := do
   let mut result := identity
   let chunks := (input.size + 24) / 25
   for i in [0:chunks] do
@@ -196,18 +194,71 @@ def pedersenHash (input : ByteArray) : Except String ByteArray := do
     if scalar == 0 || scalar >= subgroupOrder then
       throw s!"Invalid Pedersen scalar for chunk {i}"
     result := addPoints result (scalarMul point scalar)
+  return result
+
+/-- Encode the Pedersen hash point for arbitrary bytes. The note protocol
+    passes exactly 31 bytes for a nullifier hash and 62 for a commitment. -/
+def pedersenHash (input : ByteArray) : Except String ByteArray := do
+  let result ← pedersenPoint input
   match encodePoint result with
   | some bytes => return bytes
   | none => throw "Invalid Pedersen result"
 
 /-- The x-coordinate extracted by Classic Tornado from the encoded hash. -/
 def pedersenX (input : ByteArray) : Except String Nat := do
-  let bytes ← pedersenHash input
-  match decodePoint bytes with
-  | some point =>
-    match affine point with
-    | some (x, _) => return x
-    | none => throw "Invalid decoded Pedersen result"
-  | none => throw "Invalid encoded Pedersen result"
+  let point ← pedersenPoint input
+  match affine point with
+  | some (x, _) => return x
+  | none => throw "Invalid Pedersen result"
+
+namespace Pedersen
+
+/-- Public curve-point conditions checked before a note is read. -/
+def GeneratorAdmitted (point : ExtendedPoint) : Prop :=
+  point.x < fieldPrime ∧ point.y < fieldPrime ∧
+  point.z < fieldPrime ∧ point.t < fieldPrime ∧ point.z ≠ 0 ∧
+  fmul point.t point.z = fmul point.x point.y ∧
+  fadd (fmul curveA (fmul point.x point.x)) (fmul point.y point.y) =
+    fadd (fmul point.z point.z) (fmul curveD (fmul point.t point.t))
+  deriving Decidable
+
+/-- Only public coordinates survive admission. The original generator,
+normalization and unreduced subgroup-order calculation are erased evidence. -/
+structure CertifiedGenerator (index : Nat) where
+  private mk ::
+  x : Nat
+  y : Nat
+  private accepted : ∃ point : ExtendedPoint,
+    generator index = .ok point ∧ GeneratorAdmitted point ∧
+    affine point = some (x, y) ∧ (x ≠ 0 ∨ y ≠ 1) ∧
+    affine (scalarMul point subgroupOrder) = some (0, 1)
+
+/-- Inspect only a fixed public generator; this never handles a note secret. -/
+def certifyGenerator (index : Nat) : Except String (CertifiedGenerator index) :=
+  match generated : generator index with
+  | .error message => .error message
+  | .ok point =>
+    if admitted : GeneratorAdmitted point then
+      match normalized : affine point with
+      | none => .error "Public Pedersen generator did not normalize."
+      | some (x, y) =>
+        if nontrivial : x ≠ 0 ∨ y ≠ 1 then
+          if order : affine (scalarMul point subgroupOrder) = some (0, 1) then
+            .ok ⟨x, y, ⟨point, generated, admitted, normalized, nontrivial, order⟩⟩
+          else .error "Public Pedersen generator has the wrong subgroup order."
+        else .error "Public Pedersen generator is the identity."
+    else .error "Public Pedersen generator is not an admitted curve point."
+
+theorem certifiedGenerator_accepted (index : Nat) (certified : CertifiedGenerator index) :
+    ∃ point : ExtendedPoint,
+      generator index = .ok point ∧ GeneratorAdmitted point ∧
+      affine point = some (certified.x, certified.y) ∧
+      (certified.x ≠ 0 ∨ certified.y ≠ 1) ∧
+      affine (scalarMul point subgroupOrder) = some (0, 1) :=
+  certified.accepted
+
+end Pedersen
 
 end LeanCrypto
+
+#print axioms LeanCrypto.Pedersen.certifiedGenerator_accepted

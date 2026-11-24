@@ -1,7 +1,18 @@
 // Development-only pinned TypeScript/viem oracle; no network or transaction.
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
-const sourceCalls = new URL('../../tornado-cli-new-era/src/smart-account/calls.ts', import.meta.url)
+import { spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { assertOracleIdentity, oracleCommit, oracleSource } from './oracle-identity.mjs'
+if (!process.env.TORNADO_ABI_FIXTURE_TSX) {
+  const result = spawnSync(process.execPath, ['--import', resolve(oracleSource, 'node_modules/tsx/dist/loader.mjs'),
+    fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+  { stdio: 'inherit', env: { ...process.env, TORNADO_ABI_FIXTURE_TSX: '1' } })
+  process.exit(result.status ?? 1)
+}
+assertOracleIdentity()
+const sourceCalls = pathToFileURL(resolve(oracleSource, 'src/smart-account/calls.ts'))
 const { parseContractCalls, callsHash } = await import(sourceCalls.href)
 
 const target = '0x1111111111111111111111111111111111111111'
@@ -88,8 +99,12 @@ reject('wrong-safe-chain', { version: '1.0', chainId: '11155111', transactions: 
 reject('calldata-byte-bound', method([parameter('rows', 'uint8[]')], { rows: Array(510).fill(255) }))
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
-const output = { sourceCommit: 'daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7', viemVersion: '2.55.19',
+const output = { sourceCommit: oracleCommit, viemVersion: '2.55.19',
   sourceCallsSha256: sha256(readFileSync(sourceCalls)),
   cases, rejectionCases }
-writeFileSync(new URL('../fixtures/imported-abi-vectors.json', import.meta.url), JSON.stringify(output, null, 2) + '\n')
+const fixture = new URL('../fixtures/imported-abi-vectors.json', import.meta.url)
+const encoded = JSON.stringify(output, null, 2) + '\n'
+if (process.argv[2] === '--write') writeFileSync(fixture, encoded)
+else if (process.argv[2] !== '--check' || readFileSync(fixture, 'utf8') !== encoded)
+  throw new Error('Use --write or --check; imported ABI oracle fixture must match')
 console.log(`Generated ${cases.length} imported ABI parity cases and ${rejectionCases.length} rejection cases.`)

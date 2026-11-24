@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else ROOT.parent / "tornado-cli-new-era"
-SOURCE_COMMIT = "daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7"
+SOURCE_COMMIT = "a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326"
 LEAN = (ROOT / "Tornado/Protocol/SelectedPoolBootstrap.lean").read_text()
 
 

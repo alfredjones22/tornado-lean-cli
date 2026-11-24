@@ -63,7 +63,8 @@ def main : IO Unit := do
     assetsRoot := some "/selected/assets" }
   require (scope.path .note == some "/selected/protected-note" &&
     scope.path .request == some "/selected/public-request" &&
-    scope.path (.asset .graph) == some "/selected/assets/fixtures/witness-vm-selected-components.json")
+    scope.path (.asset .graph) == some "/selected/assets/fixtures/witness-vm-selected-components.json" &&
+    scope.path (.asset .witnessCertificate) == some "/selected/assets/assets/proving/tornado-witness-certificate-v1.json.gz")
     "Fixed configured path slots changed."
   events.set []
   let identityResult ← evaluateWith hardware (Tornado.Cli.ProverWorker.identityProgram 1 none)
@@ -118,7 +119,7 @@ def main : IO Unit := do
     (← events.get) == [.protect]) "A read followed failed core-dump suppression."
   failureChecks (terminal (protectionResult.value.map Response.metadata))
   -- The actual proof program has no hidden full-prover IO callback: its
-  -- request and three fixed asset reads are independently observable.
+  -- request and four fixed asset reads are independently observable.
   let proofRequest : Request := {
     chainId := 1, pool := metadata.pool, commitment := metadata.commitment,
     nullifierHash := metadata.nullifierHash, leafIndex := 0, root := 0,
@@ -130,7 +131,7 @@ def main : IO Unit := do
   events.set []
   let proofResult ← evaluateWith (backend events note.toUTF8 proofRequest.encode.toUTF8) proving
   let exactAssets := [.protect, .read .request, .read (.asset .circuit),
-    .read (.asset .key), .read (.asset .graph)]
+    .read (.asset .key), .read (.asset .graph), .read (.asset .witnessCertificate)]
   require (proofResult.value.isNone && proofResult.effects == exactAssets &&
     (← events.get) == exactAssets) "Unauthenticated assets reached secret note/entropy/proof work."
   failureChecks (terminal proofResult.value)

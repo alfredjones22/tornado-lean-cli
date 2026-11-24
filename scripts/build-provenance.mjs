@@ -10,7 +10,7 @@ const check=(condition,message)=>{if(!condition) throw new Error(message);};
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const hashPattern=/^[a-f0-9]{64}$/;
 const defaultRoot=fileURLToPath(new URL('../',import.meta.url));
-const publicPrefixes=['Tornado/','packages/lean-crypto/','proofs/','native/','tests/','scripts/','fixtures/','assets/','docs/'];
+const publicPrefixes=['Tornado/','packages/lean-crypto/','proofs/','app-proofs/','native/','tests/','scripts/','fixtures/','assets/','docs/'];
 const rootInputs=new Set(['Main.lean','Tornado.lean','lakefile.lean','lake-manifest.json','lean-toolchain','README.md','LICENSE','.gitignore']);
 const maxReportBytes=16*1024*1024;
 function plainObject(value) { return value && typeof value==='object' && !Array.isArray(value); }

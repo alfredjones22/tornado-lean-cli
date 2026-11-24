@@ -5,17 +5,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { performance } from 'node:perf_hooks'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { assertOracleIdentity, oracleCommit, oracleSource } from './oracle-identity.mjs'
 
 // Development oracle only: exact pinned SDK formula on a public test witness.
 // The runnable Tornado CLI and its proof path remain entirely native Lean.
 const lean = fileURLToPath(new URL('../', import.meta.url))
-const source = resolve(lean, '../tornado-cli-new-era')
-const sourceCommit = 'daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7'
+const source = oracleSource
+const sourceCommit = oracleCommit
+assertOracleIdentity(source)
 if (execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'],
   { encoding: 'utf8' }).trim() !== sourceCommit)
   throw new Error('The pinned TypeScript CLI checkout moved')
 const version = file => JSON.parse(readFileSync(resolve(source, file), 'utf8')).version
-if (version('node_modules/@kohaku-eth/tornado-cash/package.json') !== '0.1.0-alpha.38' ||
+if (version('node_modules/@kohaku-eth/tornado-cash/package.json') !== '0.1.0-alpha.40' ||
     version('node_modules/micro-zk-proofs/package.json') !== '0.3.1' ||
     version('node_modules/micro-zk-proofs/node_modules/@noble/curves/package.json') !== '2.2.0')
   throw new Error('The pinned Groth16 or noble oracle version changed')
@@ -145,7 +147,7 @@ const limbs = [p.pi_a[0], p.pi_a[1], p.pi_b[0][1], p.pi_b[0][0],
 const hex = '0x' + limbs.map(value => BigInt(value).toString(16).padStart(64, '0')).join('')
 const output = JSON.stringify({
   sourceCommit,
-  sdk: '@kohaku-eth/tornado-cash@0.1.0-alpha.38',
+  sdk: '@kohaku-eth/tornado-cash@0.1.0-alpha.40',
   prover: 'micro-zk-proofs@0.3.1 with NQR 7 and noble BN254',
   provingKeySHA256: keySHA256,
   publicWitnessFixtureSHA256: witnessFixtureSHA256,

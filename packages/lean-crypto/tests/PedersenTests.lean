@@ -39,6 +39,16 @@ private def check (label : String) (input : ByteArray)
     throw <| IO.userError s!"{label} x: got {x}, expected {expectedX}"
 
 def main : IO Unit := do
+  let first ← IO.ofExcept (LeanCrypto.Pedersen.certifyGenerator 0)
+  let second ← IO.ofExcept (LeanCrypto.Pedersen.certifyGenerator 1)
+  let third ← IO.ofExcept (LeanCrypto.Pedersen.certifyGenerator 2)
+  unless first.x == 10457101036533406547632367118273992217979173478358440826365724437999023779287 &&
+      first.y == 19824078218392094440610104313265183977899662750282163392862422243483260492317 &&
+      second.x == 2671756056509184035029146175565761955751135805354291559563293617232983272177 &&
+      second.y == 2663205510731142763556352975002641716101654201788071096152948830924149045094 &&
+      third.x == 5802099305472655231388284418920769829666717045250560929368476121199858275951 &&
+      third.y == 5980429700218124965372158798884772646841287887664001482443826541541529227896 do
+    throw (IO.userError "Certified generators differ from the pinned circuit bases.")
   check "empty" (repeated 0 0)
     "0100000000000000000000000000000000000000000000000000000000000000" "0"
   check "one zero" (repeated 1 0)

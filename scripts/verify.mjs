@@ -108,6 +108,24 @@ function checkMathematicalDependencies() {
       run('git', ['-C', directory, 'status', '--porcelain', '--untracked-files=no'], 10000).trim() === '',
       `Mathematical dependency checkout differs from its pin: ${name}`)
   }
+  const application = JSON.parse(read('app-proofs/lake-manifest.json'))
+  requireCheck(read('app-proofs/lean-toolchain').trim() === toolchain &&
+    application.name === 'tornadoApplicationProofs' && application.packages.length === 12,
+    'Application proof workspace dependency or toolchain pin changed')
+  const localApplication = application.packages.filter(item => item.type === 'path')
+  const expectedLocal = { leanCryptoProofs: 'proofs', tornadoLeanCli: '.', leanCrypto: 'packages/lean-crypto' }
+  requireCheck(localApplication.length === 3 && localApplication.every(item =>
+    item.name in expectedLocal && resolve(path('app-proofs'), item.dir) === path(expectedLocal[item.name])),
+    'Application proofs must import the canonical CLI, library and mathematical workspace')
+  for (const [name, expected] of Object.entries(mathematicalDependencyPins)) {
+    const entry = application.packages.find(item => item.name === name)
+    requireCheck(entry?.type === 'git' && entry.url === expected.url && entry.rev === expected.rev,
+      `Unreviewed application proof dependency: ${name}`)
+    const directory = path(`app-proofs/.lake/packages/${name}`)
+    requireCheck(run('git', ['-C', directory, 'rev-parse', 'HEAD'], 10000).trim() === expected.rev &&
+      run('git', ['-C', directory, 'status', '--porcelain', '--untracked-files=no'], 10000).trim() === '',
+      `Application proof dependency checkout differs from its pin: ${name}`)
+  }
 }
 
 function sourceFiles() {
@@ -261,8 +279,9 @@ function parseAxiomOutput(output, names, file) {
 function checkProofCertificates(theoremFiles, theoremNames) {
   const proofs = []
   for (const { file, names } of theoremFiles) {
-    if (file.startsWith('proofs/')) {
-      const output = run('lake', ['env', 'lean', '-t', '0', file.slice('proofs/'.length)], 600000, path('proofs'))
+    const proofWorkspace = ['proofs', 'app-proofs'].find(workspace => file.startsWith(`${workspace}/`))
+    if (proofWorkspace) {
+      const output = run('lake', ['env', 'lean', '-t', '0', file.slice(proofWorkspace.length + 1)], 600000, path(proofWorkspace))
       proofs.push(...parseAxiomOutput(output, names, file))
       continue
     }
@@ -307,6 +326,7 @@ const requiredPureTests = {
   "FrFFT.lean": "PASS: 7 pinned NQR-7 FFT cases, 32768-point roundtrip, 3 sparse H polynomials, roots, and rejections",
   "Groth16MSM.lean": "PASS: 4 MSM, 3 windowed MSM, 1 Groth16/Solidity vector, and 13 rejection checks",
   "SmallCircuit.lean": "PASS: standalone second-circuit R1CS, independent H/point/proof-byte oracle, one-input pairing acceptance, signal tamper, zero-input API, dimension/resource and canonical guards",
+  "ConstraintCertificate.lean": "PASS: public constraint certificates, auxiliary elimination, target tamper and 14 boundary cases",
   "StandaloneConsumer.lean": "PASS: neutral standalone consumer, fixed-byte proof aliases, hash/key/signature vectors and shared sampler bounds"
 }
 const requiredOtherModuleTests = {
@@ -321,6 +341,7 @@ const requiredMathTests = {
   'ScalarMul.lean': 'PASS: 50 exact old/new raw G1 scalar comparisons on five public representatives, q/q+1/2q/2q+1 and 512-bit scalar boundaries, plus 20 modular-reduction expectations',
 }
 const requiredFocusedTests = {
+  'tests/WitnessCertificate.lean': 'PASS: actual public-asset gate admits all 28275 rows before any private input\nPASS: public certificate size, gzip integrity, schema, constant-one, topology, and Pedersen base mutations reject\nPASS: 15 independent Pedersen schedule checks (2 acceptance, 13 adversarial rejection)',
   'tests/LibraryAliases.lean': 'PASS: legacy aliases preserve canonical structures, constructors, projections, proof terms and hash output',
   'tests/HexBoundary.lean': 'PASS: constructive byte/hex/toHex32 boundaries, exhaustive byte alphabet, parser negative controls, actual creator-to-backup certificate, and 64KiB stack boundary',
   'tests/WitnessGadgets.lean': 'PASS: actual pinned Num2Bits and DualMux slots, constructive equations, assignment preservation, exhaustive small-width reconstruction, alias conflicts, and refactor error parity',
@@ -358,6 +379,7 @@ const requiredFocusedTests = {
   'tests/ImportedAbi.lean': 'PASS: 28 pinned Safe ABI encoding/hash cases, 20 import rejections, and bounded Solidity types',
   'tests/RelayerSend.lean': 'PASS: native relayer discovery, viem registry ABI, HTTPS status, stake, fee caps, oracle deviation and quote rechecks',
   'tests/PaymasterPrepare.lean': 'PASS: dummy-only paymaster estimates, bounded refinement and fallback, fee quotes, and final proof boundary',
+  'tests/PaymasterPrepareLeadingZero.lean': 'PASS: public Sepolia leading-zero pool/verifier/shadow addresses in all three batch positions; exact dummy-only overrides',
   'tests/WithdrawalNetwork.lean': 'PASS: structured estimation errors, bounded native fees, one-attempt simulation/send, and outage admission policy',
   'tests/SponsoredPreparation.lean': 'PASS: slow proving precedes fresh history, gas and account checks and a new review clock; failures stop before review',
   'tests/EntryPointSimulation.lean': 'PASS: viem handleOps encoding, exact signed simulation events, and malformed-result rejection',
@@ -591,6 +613,23 @@ const requiredTheorems = [
   'LeanCrypto.Proofs.WindowedMSM.native_group_sum',
   'LeanCrypto.Proofs.WindowedMSM.msmG1_success_sum',
   'LeanCrypto.Proofs.WindowedMSM.msmG1_success_normalized_sum',
+  'LeanCrypto.Proofs.FFT.fft_construct',
+  'LeanCrypto.Proofs.FFT.ifft_construct',
+  'LeanCrypto.Proofs.FFT.fft_ifft_roundtrip',
+  'LeanCrypto.Proofs.FFT.calculateH_construct_strict',
+  'LeanCrypto.Proofs.FFT.calculateH_quotient',
+  'LeanCrypto.Proofs.BN254Tate.pair_construct_bilinear',
+  'LeanCrypto.Proofs.BN254Tate.scalarPair_generator_nonzero',
+  'LeanCrypto.Proofs.NativeVerifier.verify_scalar_iff',
+  'LeanCrypto.Proofs.NativeVerifier.assembly_qap_verifies',
+  'LeanCrypto.Proofs.BabyJubjub.certifiedGenerator_exact_order',
+  'Tornado.Protocol.WitnessSymbolic.certifiedPublic_schedule',
+  'Tornado.Protocol.PedersenSchedule.certifiedSchedule_alias_source',
+  'TornadoProofs.Witness.Source.prepareInputPrefix_iff_source',
+  'TornadoProofs.Witness.PedersenReference.referenceMeaning_construct',
+  'TornadoProofs.Witness.Source.native_construct_original_witness',
+  'TornadoProofs.Witness.Source.native_construct_accepted_witness',
+  'TornadoProofs.Witness.Source.native_original_worker_reference_bound',
   'Tornado.Runtime.AttemptJournal.advance_prepare_binds_selection',
   'Tornado.Runtime.AttemptJournal.advance_reserve_selected',
   'Tornado.Runtime.AttemptJournal.advance_direct_send_refines_policy',
@@ -701,14 +740,14 @@ try {
       'tests/DepositIntent.lean', 'tests/DepositCallsIntent.lean', 'tests/DepositBackupIntent.lean',
       'tests/WithdrawalJournalProgram.lean', 'tests/ReservationAdmission.lean',
       'tests/ReservationAdmissionProcess.lean',
-      'tests/LibraryAliases.lean',
+      'tests/LibraryAliases.lean', 'tests/WitnessCertificate.lean',
       'tests/HexBoundary.lean',
       'tests/WitnessGadgets.lean',
       'tests/BlindingDistribution.lean', 'tests/WithdrawalDriver.lean',
       'tests/ProverWorkerClient.lean', 'tests/ProverWorker.lean',
       'tests/Bundler.lean', 'tests/DepositMultiSend.lean', 'tests/DepositBatch7702.lean',
       'tests/RecoverySend.lean', 'tests/ImportedAbi.lean', 'tests/RelayerSend.lean',
-      'tests/PaymasterPrepare.lean', 'tests/HistorySnapshot.lean',
+      'tests/PaymasterPrepare.lean', 'tests/PaymasterPrepareLeadingZero.lean', 'tests/HistorySnapshot.lean',
       'tests/WithdrawalNetwork.lean', 'tests/SponsoredPreparation.lean',
       'tests/WithdrawalJournal.lean', 'tests/RelayerSubmit.lean',
       'tests/EntryPointSimulation.lean', 'tests/ProverWorkerMetadata.lean',
@@ -786,6 +825,7 @@ try {
   requireCheck(requiredTheorems.every(name => theoremNames.includes(name)),
     'A required native theorem is missing')
   for (const file of ['fixtures/parity-read-only.json', 'fixtures/parity-oracle-digests.json',
+    'fixtures/typescript-oracle-identity.json',
     'fixtures/plan-grid.csv', 'fixtures/plan-choices.csv', 'fixtures/seeded-note-vectors.json',
     'fixtures/status-parity.json', 'fixtures/abi-vectors.json',
     'fixtures/userop08-vectors.json', 'fixtures/rlp-vectors.json',
@@ -821,7 +861,8 @@ try {
     'fixtures/entrypoint-simulation.json',
     'fixtures/smart-account-address-vectors.json',
     'fixtures/history-snapshot/history/1/0x199112eb461ea7eec1d75b33343542e1d069b41c-306b948d71dbe716.json.gz',
-    '.gitignore', 'scripts/parity.mjs', 'scripts/notes-file-parity.mjs',
+    '.gitignore', 'scripts/parity.mjs', 'scripts/notes-file-parity.mjs', 'scripts/oracle-identity.mjs',
+    'scripts/check-oracle-compatibility.mjs', 'scripts/generate-note-creation-vectors.mjs',
     'scripts/notes-create-smoke.mjs',
     'scripts/test-protected-io.mjs', 'scripts/test-https-transport.mjs',
     'scripts/test-https-get.mjs', 'scripts/test-https-get-boundary.mjs',
@@ -833,11 +874,13 @@ try {
     'scripts/generate-bn254-tower-vectors.mjs',
     'scripts/generate-bn254-tate-vectors.mjs',
     'scripts/check-classic-vk-provenance.mjs',
+    'scripts/check-qap-alignment.mjs',
     'scripts/check-tornado-proof-equation.mjs',
     'scripts/generate-history-reducer-vectors.mjs',
     'scripts/generate-imported-abi-vectors.mjs', 'scripts/check_history_snapshots.py',
     'scripts/generate-entrypoint-simulation-vectors.mjs',
     'scripts/witness-vm-extract.mjs', 'scripts/verify.mjs',
+    'scripts/build-witness-certificate.mjs',
     'scripts/proving-key-extract.mjs',
     'scripts/generate-fr-fft-vectors.mjs',
     'scripts/deposit-status-source-check.mjs',
@@ -848,6 +891,7 @@ try {
     'scripts/test-build-provenance.mjs', 'docs/BUILD_PROVENANCE.md',
     'proofs/lake-manifest.json', 'proofs/dependency-lock.json',
     'proofs/lean-toolchain', 'proofs/README.md',
+    'app-proofs/lake-manifest.json', 'app-proofs/lean-toolchain', 'app-proofs/README.md',
     'scripts/generate-gzip-vectors.mjs',
     'native/tornado_private_io.c', 'native/tornado_private_io.h',
     'tests/native/reservation_fault_io.c',
@@ -877,6 +921,10 @@ try {
       compressedSHA256: '806676308b1fc825a97aad47eaec0499f665a1da3f3d0a0e35f7bbf6796bcd32',
       rawSize: 14522256,
       rawSHA256: '8e2d2f22beafb5a9666daebca57b13f8029c3656c65fcfbcc86e2418fa16a3af' },
+    { file: 'assets/proving/tornado-witness-certificate-v1.json.gz',
+      compressedSHA256: 'a2f7ad681ace3416a047ca5483c5590a54c2e71a7e368005e2c0f65dd642559e',
+      rawSize: 8881780,
+      rawSHA256: '4ff381811f67b8703f6edae8782d896979b30feef1a71bd198c103163c02d0f8' },
   ]
   let pinnedCircuitRaw
   let pinnedKeyRaw
@@ -889,8 +937,8 @@ try {
     const raw = gunzipSync(compressed)
     requireCheck(raw.length === asset.rawSize && sha256(raw) === asset.rawSHA256,
       `Decompressed proving asset differs from pinned source: ${asset.file}`)
-    if (asset.file.endsWith('.json.gz')) pinnedCircuitRaw = raw
-    else pinnedKeyRaw = raw
+    if (asset.file === provingAssets[0].file) pinnedCircuitRaw = raw
+    else if (asset.file === provingAssets[1].file) pinnedKeyRaw = raw
     inputHashes[asset.file] = compressedDigest
   }
   const r1csFixtureFile = 'fixtures/groth16-tornado-r1cs.json'
@@ -916,6 +964,9 @@ try {
   const mathematicalModules = files.filter(file => file.startsWith('proofs/LeanCryptoProofs/') &&
     file.endsWith('.lean')).map(file => file.slice('proofs/'.length, -'.lean'.length).replaceAll('/', '.'))
   run('lake', ['-d', path('proofs'), 'build', 'LeanCryptoProofs', ...mathematicalModules], 600000)
+  const applicationModules = files.filter(file => file.startsWith('app-proofs/TornadoProofs/') &&
+    file.endsWith('.lean')).map(file => file.slice('app-proofs/'.length, -'.lean'.length).replaceAll('/', '.'))
+  run('lake', ['-d', path('app-proofs'), 'build', 'TornadoProofs', ...applicationModules], 600000)
   const moduleTargets = files.filter(file => file.startsWith('Tornado/') &&
     !file.endsWith('Tests.lean')).map(file => file.slice(0, -'.lean'.length).replaceAll('/', '.'))
   if (kernelOnly) {
@@ -942,7 +993,7 @@ try {
     'selected_pool_bootstrap_test', 'deposit_send_test', 'deposit_multi_test',
     'native_signer_test', 'reservation_admission_process_test',
     'withdraw_proof_test', 'tornado_prover_worker', 'prover_worker_test', 'history_snapshot_test',
-    'prover_worker_metadata_test', 'relayer_submit_test', 'worker_disclosure_test',
+    'prover_worker_metadata_test', 'relayer_submit_test', 'worker_disclosure_test', 'witness_certificate_test',
     'gzip_test', 'groth16_full_public_test',
     'classic_proof_pipeline_full_test', ...moduleTargets], 600000)
   const buildArtifacts = {
@@ -968,6 +1019,7 @@ try {
     existsSync(path('.lake/build/bin/prover_worker_metadata_test')) &&
     existsSync(path('.lake/build/bin/relayer_submit_test')) &&
     existsSync(path('.lake/build/bin/worker_disclosure_test')) &&
+    existsSync(path('.lake/build/bin/witness_certificate_test')) &&
     existsSync(path('.lake/build/bin/gzip_test')) &&
     existsSync(path('.lake/build/bin/groth16_full_public_test')) &&
     existsSync(path('.lake/build/bin/classic_proof_pipeline_full_test')),
@@ -1094,6 +1146,21 @@ try {
   requireCheck(run(process.execPath, ['scripts/check-classic-vk-provenance.mjs']).trim() ===
     'PASS: complete Classic VK matches immutable Solidity source; proving-key alpha1, beta2, delta2 match',
     'Immutable Classic verifier key provenance changed')
+  requireCheck(run(process.execPath, ['scripts/check-qap-alignment.mjs']).trim() ===
+    'PASS: all 38681 A and 48617 B key coefficients match the complete circuit, seven public-slot augmentation rows and zero padding',
+    'Pinned proving-key polynomial/circuit alignment changed')
+  const witnessCertificateOutput = run(process.execPath,
+    ['scripts/build-witness-certificate.mjs', '--check'], 300000).trim()
+  const witnessCertificatePrefix = 'PASS: public witness certificate reproduced; '
+  requireCheck(witnessCertificateOutput.startsWith(witnessCertificatePrefix),
+    'Public witness certificate was not independently reproduced')
+  const witnessCertificateStats = JSON.parse(witnessCertificateOutput.slice(witnessCertificatePrefix.length))
+  requireCheck(witnessCertificateStats.nodes === 76676 && witnessCertificateStats.assigned === 36528 &&
+    witnessCertificateStats.linears === 9912 && witnessCertificateStats.nonlinear === 28275 &&
+    witnessCertificateStats.steps === 15636 && witnessCertificateStats.rules === 8228 &&
+    witnessCertificateStats.targets === 28275 &&
+    witnessCertificateStats.sha256 === provingAssets[2].compressedSHA256,
+    'Public witness-certificate derivation inventory changed')
   requireCheck(run(process.execPath, ['scripts/check-tornado-proof-equation.mjs', '--check']).trim() ===
     'PASS: noble accepts pinned Classic proof and rejects all six changed public signals',
     'Independent Classic Groth16 equation oracle changed')
@@ -1103,6 +1170,18 @@ try {
   requireCheck(run(process.execPath, ['scripts/proving-key-extract.mjs', '--check']).trim() ===
     'PASS: 12 G1, 5 G2, and 8 polynomial vectors match the pinned key',
     'Pinned proving-key vector oracle changed')
+  requireCheck(run(process.execPath, ['scripts/oracle-identity.mjs', '--check']).trim() ===
+    'PASS: pinned alpha.40 CLI source, lockfile, build and eight installed oracle package trees',
+    'Pinned TypeScript oracle dependency bytes changed')
+  requireCheck(run(process.execPath, ['scripts/check-oracle-compatibility.mjs']).trim() ===
+    'PASS: alpha.40 revalidated 1860 plan grid, 900 plan choices and 38 historical status cases',
+    'Historical oracle fixtures differ from current alpha.40 source')
+  requireCheck(run(process.execPath, ['scripts/generate-note-creation-vectors.mjs', '--check']).trim() ===
+    'Generated 3 pinned SDK independent-note vectors.',
+    'Current alpha.40 note creation or backup formatter differs from fixtures')
+  requireCheck(run(process.execPath, ['scripts/generate-imported-abi-vectors.mjs', '--check']).trim() ===
+    'Generated 28 imported ABI parity cases and 20 rejection cases.',
+    'Current imported ABI source differs from fixtures')
   requireCheck(run(process.execPath, ['scripts/generate-fr-fft-vectors.mjs', '--check']).trim() ===
     'PASS: 7 FFT and 3 H vectors match pinned noble BN254 Fr',
     'Pinned Fr FFT vector oracle changed')
@@ -1145,7 +1224,7 @@ try {
   stage = 'build provenance tool regressions'
   const provenanceToolOutput = run(process.execPath, ['scripts/test-build-provenance.mjs'], 180000).trim()
   requireCheck(provenanceToolOutput ===
-    'PASS: 66 synthetic provenance/integrity gates, tested-binary binding, source/report freshness, tampering and symlink rejection, rebuild comparison; candidates never executed',
+    'PASS: 67 synthetic provenance/integrity gates, tested-binary binding, source/report freshness, tampering and symlink rejection, rebuild comparison; candidates never executed',
     `Unexpected provenance/integrity regression output: ${provenanceToolOutput}`)
 
   stage = 'crypto vectors'
@@ -1185,6 +1264,8 @@ try {
       if (file === 'tests/ProvingKey.lean') args.push(keyTempPath)
       const output = file === 'tests/WorkerDisclosure.lean'
         ? run(path('.lake/build/bin/worker_disclosure_test'), [], 600000)
+        : file === 'tests/WitnessCertificate.lean'
+          ? run(path('.lake/build/bin/witness_certificate_test'), [], 600000)
         : run('lake', args, 600000)
       requireCheck(output.trim() === expected, `Unexpected focused native test output from ${file}: ${output}`)
       focusedTests.push({ file, result: 'PASS', detail: expected })
@@ -1375,8 +1456,10 @@ try {
   const parity = JSON.parse(read('reports/parity.json'))
   requireCheck(parity.schemaVersion === 1 && parity.runId === runId &&
     parity.status === 'PASS' && parity.total === 156 && parity.matched === 156 &&
-    parity.sourceCommit === 'daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7' &&
-    parity.sourceBuildSHA256 === 'cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809',
+    parity.sourceCommit === 'a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326' &&
+    parity.sourceBuildSHA256 === 'cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809' &&
+    parity.sourceLockSHA256 === JSON.parse(read('fixtures/typescript-oracle-identity.json')).files['package-lock.json'] &&
+    parity.sourceSdkTreeSHA256 === JSON.parse(read('fixtures/typescript-oracle-identity.json')).packages['node_modules/@kohaku-eth/tornado-cash'].sha256,
   'Read-only CLI parity report is absent or incomplete')
 
   stage = 'source stability'
@@ -1396,6 +1479,19 @@ try {
       externalLakePackages: 0, applicationOrNativeImports: false },
     mathematicalWorkspace: { path: 'proofs', dependencyPins: mathematicalDependencyPins,
       proofOnly: true, runtimeDependency: false },
+    applicationProofWorkspace: { path: 'app-proofs', dependencyPins: mathematicalDependencyPins,
+      proofOnly: true, runtimeDependency: false },
+    sourceProofEndpoints: {
+      inputDomain: 'TornadoProofs.Witness.Source.prepareInputPrefix_iff_source',
+      nativePedersenAgreement: 'TornadoProofs.Witness.PedersenReference.referenceMeaning_construct',
+      witnessCompleteness: 'TornadoProofs.Witness.Source.native_construct_accepted_witness',
+      witnessSlots: 28300, authenticatedConstraints: 28275,
+      witnessAndFinalR1CSAcceptanceAreConclusions: true,
+      nativeWorkerOutput: 'TornadoProofs.Witness.Source.native_original_worker_reference_bound',
+      terminalEventBound: '2^-251', includesLaterFailureAndEntropyExhaustion: true,
+      referenceUsesAbstractSetupTrapdoor: true, efficientPublicSimulatorProved: false,
+      setupKeyQapAndIdealEntropyContractsRemainExplicit: true,
+      physicalProcessSideChannelOrConsensusCorrectnessProved: false },
     nativeLeanSourceFiles: files.length, inputHashes,
     pinnedProvingAssets: provingAssets.map(({ file, compressedSHA256, rawSize, rawSHA256 }) =>
       ({ file, compressedSHA256, rawSize, rawSHA256, result: 'PASS' })),
@@ -1409,13 +1505,19 @@ try {
     r1csFixtureProvenance: { fixtureSHA256: r1csFixtureSHA256,
       constraintsEqualPinnedCircuit: true, metadataEqualPinnedCircuit: true,
       constraintCount: r1csFixture.constraints.length },
+    qapArtifactAlignment: { result: 'PASS', exhaustivePublicCoefficientComparison: true,
+      aCoefficients: 38681, bCoefficients: 48617, publicSlotAugmentationRows: 7,
+      honestSetupOrBinaryParserKernelProof: false },
+    publicWitnessCertificate: { result: 'PASS', ...witnessCertificateStats,
+      actualRuntimeAdmissionBeforeSecretReads: true,
+      extractorTrustedForMathematicalSoundness: false },
     proofs: { theoremCount: proofs.length,
       axiomFreeCount: proofs.filter(row => row.axioms.length === 0).length,
       allowedStandardAxioms: ['propext', 'Classical.choice', 'Quot.sound'],
       theorems: proofs, noCustomAxiomsOrProofEscapes: true },
     pureLibraryTests: pureTests,
     mathematicalTests,
-    buildProvenanceTools: { result: 'PASS', syntheticChecks: 66,
+    buildProvenanceTools: { result: 'PASS', syntheticChecks: 67,
       candidatesExecuted: false, authenticatesReleasePublisher: false,
       detail: provenanceToolOutput },
     cryptoVectors: crypto,
@@ -1566,7 +1668,7 @@ try {
       'A bounded selected-pool Saga/RPC fetch loop, pinned offline assets and protected snapshot cache serve history, compliance report, and withdrawal preflight. The cache rechecks checkpoints and handles reorgs, but provider completeness and consensus are not proved. An endpoint can omit or fabricate chain data.',
       'The history RPC is trusted with deposit-withdrawal linkage: selected deposit receipt and exact-block nullifier-spent queries can be correlated by its operator. Responses are not authenticated state proofs.',
       'The sponsored runner uses the proved command machine. The actual reservation interpreter additionally has a conditional filesystem/crash model and native process-cut tests; C/POSIX durability, signer behavior and absence of extra callback effects remain assumptions. Other send runners share journal helpers but lack complete command refinement.',
-      'The actual shared pure sampler has an arbitrary-event pushforward to the ideal field-mask model, including retry exhaustion, under IID uniform source bytes. The ideal observation bound does not yet apply to actual proof bytes: complete witness gadgets, general FFT/H/QAP, subgroup order, G2/MSM/pairing, setup and worker success/failure/output factorization remain unproved. Actual G1 weighted windowed MSM is proved. Capability confinement does not establish cryptographic zero knowledge, secret-independent timing/resources or secure erasure.',
+      'The original proof worker has a conditional terminal-event bound of 2^-251 relative to a single witness-free reference, retaining later failures and sampler exhaustion. Original input acceptance constructs its complete witness and every R1CS check. The output result retains explicit key/H composition, honest setup/query/QAP and IID uniform entropy contracts; its reference uses abstract setup trapdoor scalars, not an efficient public simulator. It does not prove malformed-input or other worker modes\' cryptographic privacy, secret-independent timing/resources, physical interpreter behavior or secure erasure.',
       'Local EVM checks use actual Classic verifier/account/paymaster code and native batch output, but synthetic EntryPoint/token/pool/address placement. They do not run full handleOps or establish deployed contract identity, consensus, or protocol correctness.',
       'Experimental pay-invoice can sign and broadcast with a local invoice claim, sender lock, conservative maximum-gas cap, and twelve-confirmation gate. Its key-file signer uses a protected native libsecp256k1 boundary, but the C/compiler/OS behavior, complete erasure, live HTTP effects, deployed contracts, and fund safety are not end-to-end proved or funded-testnet validated.',
       'Sequential and Simple7702 multi-note deposits have experimental live adapters with offline fault tests and pinned viem vectors. Signed delegation is journaled before estimation; no funded end-to-end test or correctness proof was completed.',

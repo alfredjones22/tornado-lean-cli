@@ -1,11 +1,26 @@
 // Development oracle only. Runtime Lean code does not import or execute this.
 import { readFileSync, writeFileSync } from 'node:fs'
-import { SecretManager } from '/Users/x/dev/personal/tornado-cli-new-era/node_modules/@kohaku-eth/tornado-cash/dist/index.js'
-import { encodeFunctionData, parseAbi, toHex } from '/Users/x/dev/personal/tornado-cli-new-era/node_modules/viem/_esm/index.js'
-import { formatDepositBackup } from '/Users/x/dev/personal/tornado-cli-new-era/src/domain/seed-bundle.ts'
+import { spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { assertOracleIdentity, oracleSource } from './oracle-identity.mjs'
 
-const packageJson = JSON.parse(readFileSync('/Users/x/dev/personal/tornado-cli-new-era/node_modules/@kohaku-eth/tornado-cash/package.json'))
-if (packageJson.version !== '0.1.0-alpha.38') throw new Error('SDK version drift')
+if (!process.env.TORNADO_NOTE_FIXTURE_TSX) {
+  const result = spawnSync(process.execPath, ['--import', resolve(oracleSource, 'node_modules/tsx/dist/loader.mjs'),
+    fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+  { stdio: 'inherit', env: { ...process.env, TORNADO_NOTE_FIXTURE_TSX: '1' } })
+  process.exit(result.status ?? 1)
+}
+assertOracleIdentity()
+const { SecretManager } = await import(pathToFileURL(resolve(oracleSource, 'node_modules/@kohaku-eth/tornado-cash/dist/index.js')))
+const { encodeFunctionData, parseAbi, toHex } = await import(pathToFileURL(resolve(oracleSource, 'node_modules/viem/_esm/index.js')))
+const { formatDepositBackup } = await import(pathToFileURL(resolve(oracleSource, 'src/domain/seed-bundle.ts')))
+const packageJson = JSON.parse(readFileSync(resolve(oracleSource, 'node_modules/@kohaku-eth/tornado-cash/package.json')))
+if (!['--write', '--check'].includes(process.argv[2])) throw new Error('Use --write or --check')
+const emit = (file, output) => {
+  if (process.argv[2] === '--write') writeFileSync(file, output)
+  else if (readFileSync(file, 'utf8') !== output) throw new Error(`Pinned note fixture changed: ${file}`)
+}
 
 const pools = [
   { name: 'mainnet-eth-001', chainId: 1, denomination: '0.01', symbol: 'ETH',
@@ -51,9 +66,9 @@ for (const pool of pools) {
     },
   })
 }
-writeFileSync(new URL('../fixtures/note-creation-vectors.json', import.meta.url),
+emit(new URL('../fixtures/note-creation-vectors.json', import.meta.url),
   JSON.stringify({ sdkVersion: packageJson.version, vectors: fixture }, null, 2) + '\n')
 const seeded = JSON.parse(readFileSync(new URL('../fixtures/seeded-note-vectors.json', import.meta.url)))
-writeFileSync(new URL('../fixtures/seeded-backup-format.txt', import.meta.url),
+emit(new URL('../fixtures/seeded-backup-format.txt', import.meta.url),
   formatDepositBackup(seeded.groups[0].notes, seeded.mnemonic))
 console.log(`Generated ${fixture.length} pinned SDK independent-note vectors.`)

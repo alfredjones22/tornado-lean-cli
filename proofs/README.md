@@ -15,97 +15,115 @@ following targeted cache request covers the current direct Mathlib imports
 and their dependencies, including the G1 Jacobian group bridge:
 
 ```sh
-lake -d proofs exe cache get \
-  Mathlib/Algebra/Field/Basic.lean Mathlib/Algebra/Field/ZMod.lean \
-  Mathlib/Algebra/BigOperators/Fin.lean Mathlib/Algebra/BigOperators/Intervals.lean \
-  Mathlib/AlgebraicGeometry/EllipticCurve/Jacobian/Point.lean \
-  Mathlib/Data/Finset/Prod.lean Mathlib/Data/Fintype/BigOperators.lean \
-  Mathlib/Data/Fintype/Card.lean Mathlib/Data/Fintype/EquivFin.lean \
-  Mathlib/Data/Fintype/Prod.lean Mathlib/Data/Fintype/Sum.lean \
-  Mathlib/Logic/Equiv/Basic.lean Mathlib/NumberTheory/LucasPrimality.lean \
-  Mathlib/SetTheory/Cardinal/Finite.lean Mathlib/Tactic/FieldSimp.lean \
-  Mathlib/Tactic/Linarith.lean Mathlib/Tactic/NormNum.lean \
-  Mathlib/Tactic/NormNum/Prime.lean Mathlib/Tactic/ReduceModChar.lean \
-  Mathlib/Tactic/Ring.lean
+MATHLIB_NO_CACHE_ON_UPDATE=1 lake -d proofs exe cache get \
+  Mathlib.Algebra.BigOperators.Fin \
+  Mathlib.Algebra.BigOperators.Group.Finset.Basic \
+  Mathlib.Algebra.BigOperators.Group.List.Basic \
+  Mathlib.Algebra.BigOperators.Intervals \
+  Mathlib.Algebra.BigOperators.Ring.Finset \
+  Mathlib.Algebra.Field.Basic \
+  Mathlib.Algebra.Field.ZMod \
+  Mathlib.Algebra.Group.Hom.Defs \
+  Mathlib.Algebra.Polynomial.BigOperators \
+  Mathlib.Algebra.Polynomial.Eval.Degree \
+  Mathlib.Algebra.Polynomial.SpecificDegree \
+  Mathlib.Algebra.QuadraticAlgebra.Basic \
+  Mathlib.AlgebraicGeometry.EllipticCurve.Affine.Point \
+  Mathlib.AlgebraicGeometry.EllipticCurve.Jacobian.Point \
+  Mathlib.Data.Finset.Prod \
+  Mathlib.Data.Fintype.BigOperators \
+  Mathlib.Data.Fintype.Card \
+  Mathlib.Data.Fintype.EquivFin \
+  Mathlib.Data.Fintype.Prod \
+  Mathlib.Data.Fintype.Sum \
+  Mathlib.GroupTheory.OrderOfElement \
+  Mathlib.Logic.Equiv.Basic \
+  Mathlib.NumberTheory.LucasPrimality \
+  Mathlib.RingTheory.AdjoinRoot \
+  Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots \
+  Mathlib.SetTheory.Cardinal.Finite \
+  Mathlib.Tactic.Abel \
+  Mathlib.Tactic.FieldSimp \
+  Mathlib.Tactic.Linarith \
+  Mathlib.Tactic.LinearCombination \
+  Mathlib.Tactic.NormNum \
+  Mathlib.Tactic.NormNum.Prime \
+  Mathlib.Tactic.ReduceModChar \
+  Mathlib.Tactic.Ring
 ```
 
-## Native representation and construction
+## Native arithmetic and proof construction
 
-`Primes` contains explicit Lucas/Pratt certificates. Lean checks the products,
-recursive prime facts and modular-power conditions; untrusted factor search
-is not the certificate. `CertifiedFields` closes the actual base/scalar prime
-hypotheses. `FpModel` and `FrModel` relate native modular operations and total
-binary exponentiation to `ZMod`, and construct the actual checked inverse for
-every nonzero modeled input.
+The theorem statements refer to the original `LeanCrypto` definitions, not
+an independently executable replacement. Independent mathematical models
+supply the specification; constructors derive actual native returns from
+original-input conditions instead of assuming successful final checks.
 
-`RootConstruction` constructs canonical roots of exact multiplicative order
-for every admitted FFT length, the powers of two through 65,536.
-`ButterflyModel` proves the actual indexed update's field meaning and
-preservation properties. `TwoPointModel` proves the actual forward and
-normalized inverse size-two DFT. General FFT/IFFT and H/QAP derivation are
-not proved by these local results.
+- `Primes`, `CertifiedFields` and `BabyJubjub/Primes` certify the field and
+  subgroup primes with explicit kernel-checked Lucas/Pratt certificates.
+  `FpModel`, `FrModel`, `Fp2Model`, `Fp6Model` and `Fp12Model` relate native
+  arithmetic, inverses and exponentiation to mathematical fields.
+- `FFT/NativeTransform` proves complete native forward and normalized inverse
+  DFT semantics and roundtrip at every admitted power-of-two length through
+  65,536. `FFT/HConstruction` constructs sparse accumulation, transforms,
+  convolution, high-half extraction and trimming, proves H fits the
+  domain-minus-one query, and derives the QAP quotient equation from the
+  independently specified constraint rows and polynomial degrees.
+- The G1 and G2 group, scalar, normalization and MSM modules connect actual
+  native addition, doubling, scalar loops and bucket algorithms to Mathlib
+  elliptic-curve groups. Generator order uses unreduced native calculations;
+  initially reducing the scalar would make that check vacuous.
+- `AssemblySource`, `AssemblyGroup`, `AssemblyScalars` and `AssemblyFormula`
+  construct the original Groth16 assembly and prove all A/B/C formulas.
+  `NormalizationUniqueness`, `ProofCodec` and `ProofObservation` connect the
+  actual point coordinates and exact eight-limb serializer, including its
+  exceptional outcomes, to the mathematical scalar triple.
+- The Tate function-field, native line and Miller modules derive actual
+  evaluation, including denominator guards. `BilinearPairing` constructs the
+  original public pairing return and proves additivity in both arguments.
+  `VerifierCompleteness.assembly_qap_verifies` then constructs native verifier
+  acceptance from original assembly and QAP equations, with explicit honest
+  setup/query/verifying-key relations and the executable's finite-point
+  conditions. Pairing or verifier acceptance is not a premise.
+- `ConstraintCertificate` proves the pure checker for public linear
+  elimination and R1CS row derivations. The application uses that checker
+  on the full pinned circuit before reading a note or entropy.
+- `BabyJubjub/Parameters` proves the actual Edwards coefficient a is a square
+  and d a nonsquare, and derives complete addition denominators.
+  `NativeWindows`, `WindowSeparation` and `TableSeparation` tie the native
+  signed-nibble loop to bounded, nonzero scalars and prove table/prefix
+  additions cannot collide or cancel modulo the certified subgroup order.
 
-`JacobianModel` proves preservation of the admitted G1 representation,
-including the native infinity sentinel. `G1GroupLaw` maps actual native
-addition and doubling to Mathlib's established elliptic-curve group, covering
-all branches. `JacobianNormalization` constructs actual normalization from a
-nonzero Z and projective curve equation, and handles canonical infinity.
-`NormalizationGroupLaw` connects those actual results to the same group sums.
-Group equality here is after mapping representations, not raw-coordinate
-identity. `ScalarMulGroupLaw` and `ScalarMulNormalization` prove that the actual total native scalar loop preserves
-admission and represents `(n % q) • P`, where `q` is the BN254 scalar
-prime, or `n • P` for canonical `n < q`.
-It also constructs its normalized group result. G1 group/subgroup order and
-removing the modulo restriction for arbitrary n remain open.
+The setup relations are mathematical assumptions about the original encoded
+key and ceremony. A digest authenticates bytes; it does not establish an
+honest setup, the meaning of a point query, or a deployed verifier's identity.
+Native Tate pairing is not formally identified with Ethereum's optimal Ate
+precompile. Cryptographic soundness, discrete-log hardness, timing, resources
+and secret erasure are not consequences of these algebraic results.
 
-The windowed-MSM proof modules cover the actual private bucket/Horner engine,
-its native G1 transport and the public entry point. `msmG1_success_sum` binds
-public success to the exact ordered decoding of the original point array,
-matching counts, canonical original scalars and the mathematical weighted sum.
-`msmG1_success_normalized_sum` constructs the actual optional affine result
-representing that same sum. G1 MSM correctness is therefore established on
-accepted inputs; G2 MSM/group and full Groth16 point assembly remain unproved.
+## Native proof-output distribution
 
-`ProofCodec` proves the actual private word loop constructs fixed-width
-big-endian bytes and the public serializer yields 256 bytes with all eight
-ordered limbs recoverable. `NormalizedProofCodec` discharges finite G1 A/C
-normalization from independent curve conditions; G2 normalization output
-remains an explicit premise. This does not prove the verifier's parser,
-G2/pairing semantics or a map from ideal scalar triples to real proof bytes.
+`Groth16IdealPrivacy` proves exact observation counts for full-field masks
+and the explicit nonzero-mask event bound `4q/(q−1)²`, retaining retry failure.
+`Groth16SharedSamplerBridge` and `SamplerField` connect that statement to
+bounded rejection sampling and canonical native scalar-to-field decoding.
+The [application workspace](../app-proofs/README.md) connects the original
+native assembly, acceptance, wire validator and worker terminal output to the
+same observation, under its source and honest-setup conditions. The resulting
+BN254 event bound is at most `2^-251`, under IID uniform 32-byte draws.
+This is a statistical output statement for a fixed public setup and public
+signals. It excludes time, memory, OS behavior and history-query linkage.
 
-## Ideal observation counts and remaining privacy boundary
+## Checking the evidence
 
-`Groth16IdealPrivacy` assumes a common public setup with nonzero δ and
-compatible offsets `δK = AB − κ`. Bijective affine transport of full-field
-masks preserves the ideal Groth16 triple and every common deterministic
-observation's exact counts. With nonzero masks, the explicit event-probability
-bound is `4q/(q−1)²`; the bounded model retains its common retry-failure outcome
-without success conditioning.
+Every named theorem has exactly one axiom inspection. The gate rejects custom
+axioms and proof escapes and permits only standard `propext`,
+`Classical.choice` and `Quot.sound`. Logical hypotheses remain in theorem
+statements; an allowed axiom list does not mean a statement has no hypotheses.
 
-`Groth16SharedSamplerBridge` identifies the shared sequential sampler's
-weights and failure/success coefficients. `SamplerField` closes the stronger
-canonical scalar-to-field bijection and arbitrary-event pushforward,
-including actual full-width byte decoding and every bounded retry outcome.
-The ideal event bound therefore applies to that field-cast observation of
-the shared pure sampler under IID uniform input bytes.
-
-This does not establish the distribution of the complete worker's released
-bytes or additional failures. The application has constructive Num2Bits248
-and DualMux gadget results; complete witness-gadget correspondence remains
-open. General FFT/H/QAP, group/subgroup order, G2 MSM/group
-and pairing correspondence and the factorization of actual coordinates,
-encoding and release through the ideal triple remain unproved. OS/native
-entropy-distribution coupling, timing, resources, erasure and history/RPC
-privacy are outside these mathematical results. No implementation
-zero-knowledge or end-to-end fund-safety claim follows.
-
-This validation uses pinned Mathlib sources and its official precompiled
-caches. Project proof source is compiled and kernel-checked against those
-imported library artifacts; the entire dependency tree was not rebuilt from
-source. Imported dependency/build artifacts and the compiler remain trusted.
-
-Every named theorem has an axiom inspection. The verification gate rejects
-custom axioms and proof escapes, and permits only standard `propext`,
-`Classical.choice` and `Quot.sound` dependencies. Compiler/runtime, OS, honest
-setup, chain and side-channel assumptions remain separately visible in the
-[parent specification](../docs/WITHDRAWAL_SECURITY_SPEC.md).
+This validation uses pinned Mathlib sources and official precompiled caches.
+Project proofs are compiled and kernel-checked against those imported library
+artifacts. The entire dependency tree is not rebuilt from source. Imported
+library/build artifacts and the compiler remain trusted. See the
+[parent specification](../docs/WITHDRAWAL_SECURITY_SPEC.md) for executable,
+OS, setup, chain and side-channel boundaries.

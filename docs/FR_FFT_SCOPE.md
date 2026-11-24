@@ -9,8 +9,11 @@ inversion checks its multiplicative result. The separate
 [mathematical workspace](../proofs/README.md) certifies the scalar prime and
 constructs the actual inverse for every nonzero modeled input. It constructs
 canonical roots of exact multiplicative order for every admitted size, and
-proves the actual indexed butterfly and forward/normalized-inverse two-point
-DFT semantics. General FFT/IFFT and H/QAP correctness remain open.
+proves the actual indexed butterfly, complete forward and normalized inverse
+DFT, bit-reversal and stage loops, and FFT/IFFT roundtrip for every admitted
+length. These are universal source-level constructions, rather than
+assumptions that the native transform returned successfully. See
+[`NativeTransform.lean`](../proofs/LeanCryptoProofs/FFT/NativeTransform.lean).
 
 The pinned TypeScript SDK's `createTornadoProver` passes `nqr: 7` into
 `micro-zk-proofs@0.3.1`; that library uses `@noble/curves`' BN254 Fr FFT. The
@@ -43,8 +46,24 @@ inverse requests. These are finite compatibility tests, not a universal proof.
 carry the proving key's digest proof itself. The complete proof pipeline obtains
 its polynomials through `authenticatePinnedKey` and `decodeFullKey`, checks the
 complete witness, and records that the same witness and decoded key supplied
-the native H calculation. This is original-input execution provenance, not a
-proved QAP identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md). This code
+the native H calculation.
+
+[`HConstruction.lean`](../proofs/LeanCryptoProofs/FFT/HConstruction.lean) proves
+the actual sparse accumulation, inverse transforms, convolution, high-half
+extraction and trailing-zero trimming construct H. Its stronger dimension
+result is `h.size ≤ domain − 1`, matching the setup query length. From
+independent degree-bounded A/B/C polynomials, original sparse-row alignment
+and satisfied row equations, `calculateH_quotient` derives
+`H(X)·(X^domain−1) = A(X)·B(X)−C(X)`. A quotient or successful verifier result
+is not a premise.
+
+The application
+[`HSource`](../app-proofs/TornadoProofs/QapSource.lean) makes those source
+conditions explicit. The offline `check-qap-alignment.mjs` additionally checks
+every stored A/B coefficient against the pinned R1CS, seven public unit rows,
+and zero padding. That finite artifact check is not a kernel proof of the
+binary parser or of an honest setup. See
+[pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md). This code
 is variable-time bigint arithmetic, used by the isolated experimental worker
 with no constant-time or erasure guarantee and no side-channel certification.
 Groth16 MSMs, blinding, pairing verification and withdrawal

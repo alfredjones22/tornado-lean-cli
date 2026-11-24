@@ -49,9 +49,26 @@ sign, submit, authenticate chain state or prove deployed verifier identity.
 
 ## Boundaries
 
-- The proofs of inverse, output, and signal-bound guards are kernel-checked and use no custom
-  axioms. They do **not** prove extension-field laws, Miller-loop correctness,
-  nondegeneracy, or Groth16 soundness. Differential tests cover public vectors.
+- The separate mathematical workspace constructs Fp2, Fp6 and Fp12 field
+  interpretations, actual inverses and exponentiation, twist and curve-group
+  embeddings, line functions, complete native Miller-loop evaluation and both
+  pairing addition laws.
+  [`pair_construct_bilinear`](../proofs/LeanCryptoProofs/BilinearPairing.lean)
+  constructs the actual public pairing return from independent on-curve and
+  torsion conditions; bilinearity or successful pairing is not a premise.
+- `GeneratorPairingResult` checks a closed arithmetic trace for the actual
+  native generator pairing and proves it is not one. Together with exact
+  generator orders and native bilinearity, `ScalarPairingFaithfulness`
+  proves faithfulness on the stated scalar spans.
+  [`verify_scalar_iff`](../proofs/LeanCryptoProofs/VerifierScalarEquivalence.lean)
+  proves that the original native verifier accepts exactly the scalar
+  equation on its valid canonical finite generator-span domain. This is
+  kernel-checked nondegeneracy evidence, beyond sampled doubling vectors.
+- [`assembly_qap_verifies`](../proofs/LeanCryptoProofs/VerifierCompleteness.lean)
+  derives native verifier acceptance from original assembly, QAP equations
+  and precisely stated honest setup/key relations. It retains the
+  executable's finite-point conditions. This is not a proof of cryptographic
+  Groth16 soundness or setup honesty.
 - Reduced Tate outputs differ from EIP-197 optimal Ate bytes. For correctly
   implemented nondegenerate bilinear pairings on the same prime-order groups,
   the four-pair equality is equivalent; that correspondence is not proved

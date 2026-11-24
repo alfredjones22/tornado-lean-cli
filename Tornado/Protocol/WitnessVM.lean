@@ -1,4 +1,5 @@
 import Lean
+import LeanCrypto.Groth16.FFT
 import Tornado.Crypto.MiMCTree
 import Tornado.Crypto.SHA256
 import Tornado.Protocol.TornadoWitness
@@ -282,15 +283,11 @@ private def fadd (x y : Nat) : Nat := (x + y) % scalarPrime
 private def fsub (x y : Nat) : Nat := (x + scalarPrime - y % scalarPrime) % scalarPrime
 private def fmul (x y : Nat) : Nat := x * y % scalarPrime
 
-private def powMod (base exponent : Nat) : Nat := Id.run do
-  let mut result := 1
-  let mut x := base % scalarPrime
-  let mut n := exponent
-  while n > 0 do
-    if n % 2 == 1 then result := fmul result x
-    x := fmul x x
-    n := n / 2
-  return result
+/-- Share the canonical total scalar-field exponentiation. The field modulus
+is definitionally the same as the circuit field; the loop strictly halves the
+exponent rather than hiding its equations behind an opaque while primitive. -/
+private def powMod (base exponent : Nat) : Nat :=
+  LeanCrypto.Groth16.FFT.powMod base exponent
 
 /-- Inversion verifies its own equation. No primality assumption is needed to
     trust a returned inverse; a zero or nonunit denominator fails closed. -/
@@ -323,6 +320,76 @@ private def muxCoordinate (inputs : Array Nat) (coordinate : Nat)
     (fadd (fadd (fadd a10 a1) a0) c0)
   return #[a210, a21, a20, a2, a10, a1, a0, c0, out]
 
+/-- Pure arithmetic output stage shared with constructive witness proofs.
+Input/output wiring and write consistency remain checked by the caller. -/
+def primitiveValues (kind : String) (inputs : Array Nat) : Except String (Array Nat) := do
+  match kind with
+      | "MontgomeryAdd" => do
+          let x1 := inputs[0]!
+          let y1 := inputs[1]!
+          let x2 := inputs[2]!
+          let y2 := inputs[3]!
+          let lambda := fmul (fsub y2 y1) (← finv (fsub x2 x1))
+          let outX := fsub (fsub (fsub (fmul lambda lambda) 168698) x1) x2
+          let outY := fsub (fmul lambda (fsub x1 outX)) y1
+          pure #[lambda, outX, outY]
+      | "MontgomeryDouble" => do
+          let x := inputs[0]!
+          let y := inputs[1]!
+          let xSquared := fmul x x
+          let numerator := fadd (fadd (fmul 3 xSquared) (fmul (2 * 168698) x)) 1
+          let lambda := fmul numerator (← finv (fmul 2 y))
+          let outX := fsub (fsub (fmul lambda lambda) 168698) (fmul 2 x)
+          let outY := fsub (fmul lambda (fsub x outX)) y
+          pure #[xSquared, lambda, outX, outY]
+      | "Edwards2Montgomery" => do
+          let x := inputs[0]!
+          let y := inputs[1]!
+          let outX := fmul (fadd 1 y) (← finv (fsub 1 y))
+          let outY := fmul outX (← finv x)
+          pure #[outX, outY]
+      | "Montgomery2Edwards" => do
+          let x := inputs[0]!
+          let y := inputs[1]!
+          let outX := fmul x (← finv y)
+          let outY := fmul (fsub x 1) (← finv (fadd x 1))
+          pure #[outX, outY]
+      | "BabyAdd" => do
+          let x1 := inputs[0]!
+          let y1 := inputs[1]!
+          let x2 := inputs[2]!
+          let y2 := inputs[3]!
+          let beta := fmul x1 y2
+          let gamma := fmul y1 x2
+          let delta := fmul (fsub y1 (fmul 168700 x1)) (fadd x2 y2)
+          let tau := fmul beta gamma
+          let outX := fmul (fadd beta gamma)
+            (← finv (fadd 1 (fmul 168696 tau)))
+          let outY := fmul (fsub (fadd delta (fmul 168700 beta)) gamma)
+            (← finv (fsub 1 (fmul 168696 tau)))
+          pure #[beta, gamma, delta, tau, outX, outY]
+      | "Window4" => do
+          let muxY := inputs[0]!
+          let sign := inputs[1]!
+          if sign > 1 then throw "Window4 sign input is not a bit."
+          pure #[fsub muxY (fmul (fmul 2 muxY) sign)]
+      | "MultiMux3" => do
+          let s0 := inputs[0]!
+          let s1 := inputs[1]!
+          let s2 := inputs[2]!
+          if s0 > 1 || s1 > 1 || s2 > 1 then
+            throw "MultiMux3 selector is not a bit."
+          let s10 := fmul s1 s0
+          let coordinate0 := muxCoordinate inputs 0 s0 s1 s2 s10
+          let coordinate1 := muxCoordinate inputs 1 s0 s1 s2 s10
+          let mut values := #[s10]
+          for i in [0:9] do
+            values := values.push coordinate0[i]!
+            values := values.push coordinate1[i]!
+          pure values
+      | "Square" => pure #[fmul inputs[0]! inputs[0]!]
+      | _ => throw s!"Unsupported circuit primitive {kind}."
+
 /-- Evaluate one topologically ordered, typed Circom primitive over BN254 Fr.
     Every input must already have a native assignment; missing inputs fail
     rather than silently defaulting to the SDK fixture's value. -/
@@ -332,72 +399,7 @@ def evaluatePrimitive (state : Assignment) (primitive : Primitive) :
     throw s!"Unsupported or malformed circuit primitive {primitive.name}."
   let mut inputs := #[]
   for index in primitive.inputs do inputs := inputs.push (← state.read index)
-  let outputs ← match primitive.kind with
-    | "MontgomeryAdd" => do
-        let x1 := inputs[0]!
-        let y1 := inputs[1]!
-        let x2 := inputs[2]!
-        let y2 := inputs[3]!
-        let lambda := fmul (fsub y2 y1) (← finv (fsub x2 x1))
-        let outX := fsub (fsub (fsub (fmul lambda lambda) 168698) x1) x2
-        let outY := fsub (fmul lambda (fsub x1 outX)) y1
-        pure #[lambda, outX, outY]
-    | "MontgomeryDouble" => do
-        let x := inputs[0]!
-        let y := inputs[1]!
-        let xSquared := fmul x x
-        let numerator := fadd (fadd (fmul 3 xSquared) (fmul (2 * 168698) x)) 1
-        let lambda := fmul numerator (← finv (fmul 2 y))
-        let outX := fsub (fsub (fmul lambda lambda) 168698) (fmul 2 x)
-        let outY := fsub (fmul lambda (fsub x outX)) y
-        pure #[xSquared, lambda, outX, outY]
-    | "Edwards2Montgomery" => do
-        let x := inputs[0]!
-        let y := inputs[1]!
-        let outX := fmul (fadd 1 y) (← finv (fsub 1 y))
-        let outY := fmul outX (← finv x)
-        pure #[outX, outY]
-    | "Montgomery2Edwards" => do
-        let x := inputs[0]!
-        let y := inputs[1]!
-        let outX := fmul x (← finv y)
-        let outY := fmul (fsub x 1) (← finv (fadd x 1))
-        pure #[outX, outY]
-    | "BabyAdd" => do
-        let x1 := inputs[0]!
-        let y1 := inputs[1]!
-        let x2 := inputs[2]!
-        let y2 := inputs[3]!
-        let beta := fmul x1 y2
-        let gamma := fmul y1 x2
-        let delta := fmul (fsub y1 (fmul 168700 x1)) (fadd x2 y2)
-        let tau := fmul beta gamma
-        let outX := fmul (fadd beta gamma)
-          (← finv (fadd 1 (fmul 168696 tau)))
-        let outY := fmul (fsub (fadd delta (fmul 168700 beta)) gamma)
-          (← finv (fsub 1 (fmul 168696 tau)))
-        pure #[beta, gamma, delta, tau, outX, outY]
-    | "Window4" => do
-        let muxY := inputs[0]!
-        let sign := inputs[1]!
-        if sign > 1 then throw "Window4 sign input is not a bit."
-        pure #[fsub muxY (fmul (fmul 2 muxY) sign)]
-    | "MultiMux3" => do
-        let s0 := inputs[0]!
-        let s1 := inputs[1]!
-        let s2 := inputs[2]!
-        if s0 > 1 || s1 > 1 || s2 > 1 then
-          throw "MultiMux3 selector is not a bit."
-        let s10 := fmul s1 s0
-        let coordinate0 := muxCoordinate inputs 0 s0 s1 s2 s10
-        let coordinate1 := muxCoordinate inputs 1 s0 s1 s2 s10
-        let mut values := #[s10]
-        for i in [0:9] do
-          values := values.push coordinate0[i]!
-          values := values.push coordinate1[i]!
-        pure values
-    | "Square" => pure #[fmul inputs[0]! inputs[0]!]
-    | _ => throw s!"Unsupported circuit primitive {primitive.kind}."
+  let outputs ← primitiveValues primitive.kind inputs
   if outputs.size != primitive.outputs.size then
     throw s!"Circuit primitive {primitive.name} output count differs from metadata."
   let mut result := state
@@ -415,31 +417,41 @@ def executeNum2Bits (state : Assignment) (component : Num2BitsComponent) :
     result ← result.write component.outputs[bit]! (bitValue input bit)
   return result
 
+/-- Explicit round frame for constructive Feistel execution. -/
+structure FeistelFrame (State : Type) where
+  state : State
+  left : Nat
+  right : Nat
+
+def executeFeistelRound (constants : Array Nat) (stage : Feistel) (key round : Nat)
+    (frame : FeistelFrame Assignment) : Except String (FeistelFrame Assignment) := do
+  let t := (frame.left + key + constants[round]!) % scalarPrime
+  let square := t * t % scalarPrime
+  let fourth := square * square % scalarPrime
+  let fifth := fourth * t % scalarPrime
+  let first ← frame.state.write stage.t2[round]! square
+  let second ← first.write stage.t4[round]! fourth
+  let next := (frame.right + fifth) % scalarPrime
+  if round < 219 then
+    let third ← second.write stage.leftRounds[round]! next
+    let fourthState ← third.write stage.rightRounds[round]! frame.left
+    return ⟨fourthState, next, frame.left⟩
+  else
+    let third ← second.write stage.leftOutput frame.left
+    let fourthState ← third.write stage.rightOutput next
+    return ⟨fourthState, frame.left, next⟩
+
 def executeFeistel (constants : Array Nat) (state : Assignment)
     (stage : Feistel) : Except String Assignment := do
   if constants.size != 220 || !stage.layoutValid state.values.size then
     throw "MiMCFeistel round constants or signal layout are invalid."
   let key ← state.read stage.key
-  let mut left ← state.read stage.leftInput
-  let mut right ← state.read stage.rightInput
-  let mut result := state
+  let left ← state.read stage.leftInput
+  let right ← state.read stage.rightInput
+  let mut frame : FeistelFrame Assignment := ⟨state, left, right⟩
   for round in [0:220] do
-    let t := (left + key + constants[round]!) % scalarPrime
-    let square := t * t % scalarPrime
-    let fourth := square * square % scalarPrime
-    let fifth := fourth * t % scalarPrime
-    result ← result.write stage.t2[round]! square
-    result ← result.write stage.t4[round]! fourth
-    if round < 219 then
-      let nextLeft := (right + fifth) % scalarPrime
-      result ← result.write stage.leftRounds[round]! nextLeft
-      result ← result.write stage.rightRounds[round]! left
-      right := left
-      left := nextLeft
-    else
-      result ← result.write stage.leftOutput left
-      result ← result.write stage.rightOutput ((right + fifth) % scalarPrime)
-  return result
+    frame ← executeFeistelRound constants stage key round frame
+  return frame.state
 
 /-- Execute the exact Circom DualMux read/bit-check/two-write stage. -/
 def executeDualMux (state : Assignment) (level : MerkleLevel) :

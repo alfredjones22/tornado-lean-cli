@@ -4,13 +4,15 @@ import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
+import { assertOracleIdentity } from './oracle-identity.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const source = resolve(process.env.TORNADO_TS_CLI || join(root, '..', 'tornado-cli-new-era'))
 const fixturePath = resolve(process.env.FR_FFT_FIXTURE_PATH || join(root, 'fixtures/fr-fft-vectors.json'))
+assertOracleIdentity(source)
 const sourcePackage = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'))
 if (sourcePackage.dependencies['micro-zk-proofs'] !== '0.3.1' ||
-    sourcePackage.dependencies['@kohaku-eth/tornado-cash'] !== '0.1.0-alpha.38')
+    sourcePackage.dependencies['@kohaku-eth/tornado-cash'] !== '0.1.0-alpha.40')
   throw new Error('The pinned TypeScript FFT dependencies changed')
 const requireFromSource = createRequire(join(source, 'package.json'))
 const { bn254 } = await import(pathToFileURL(requireFromSource.resolve('@noble/curves/bn254.js')))

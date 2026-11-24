@@ -33,10 +33,11 @@ def main : IO UInt32 := do
   let compressedKey ← IO.FS.readBinFile
     "assets/proving/tornadoProvingKey-8e2d2f22beafb5a9.bin.gz"
   let graphText ← IO.FS.readFile "fixtures/witness-vm-selected-components.json"
+  let witnessCertificate ← IO.FS.readBinFile "assets/proving/tornado-witness-certificate-v1.json.gz"
   expectError "wrong graph digest" <|
-    loadBundled compressedCircuit compressedKey (graphText ++ " ")
+    loadBundled compressedCircuit compressedKey (graphText ++ " ") witnessCertificate
   let assets ← unwrap "authenticate and decode bundled assets" <|
-    loadBundled compressedCircuit compressedKey graphText
+    loadBundled compressedCircuit compressedKey graphText witnessCertificate
   let key := bigEndian
     0xa0030e1f064deb82242c2915d0ec910c23656641e72904c10055c5e395bad5bb 32
   let note ← unwrap "derive public note" <|

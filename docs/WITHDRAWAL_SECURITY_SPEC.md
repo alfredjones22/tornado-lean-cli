@@ -95,7 +95,7 @@ checks do not authenticate Ethereum consensus or prove finality.
 The real worker dispatcher constructs a restricted
 [`WorkerProgram`](../Tornado/Runtime/WorkerProgram.lean). Its available effects
 are reading the configured protected note, the configured bounded request,
-three fixed asset slots, and 32-byte entropy draws in proof mode. There is no
+four fixed asset slots, and 32-byte entropy draws in proof mode. There is no
 network, arbitrary-path read, file-write or logging instruction in that
 language. Core-dump suppression is attempted before any read or entropy
 access; failure stops evaluation.
@@ -152,11 +152,15 @@ public setup, full-field mask observations have exact equal counts; nonzero
 mask observations satisfy the explicit `4q/(q−1)²` event bound. The bounded
 statement includes failure and does not condition it away.
 
-These observations are functions of the ideal field triple. The complete
-worker's native proof construction, additional failures and released output
-are not proved to factor through it. Correct blinding therefore does not yet
-establish implementation zero knowledge, secret-independent failures or safe
-timing, resources and memory behavior.
+The [application theorem](../app-proofs/TornadoProofs/WorkerPrefix.lean)
+now relates that observation to the original proofProgram, including actual
+native assembly, normalization, serialization, compiled-key verification,
+request validation and terminal stdout/stderr/exit status. Under its explicit
+original-input admission, source and honest-setup conditions, the event bound
+is at most `2^-251` for the same public setup and public signals. Later proof
+failures and exhaustion remain visible and counted. This does not certify
+arbitrary note-parser failures, other worker modes' outputs, physical partial
+writes, timing, resource use, crashes or retained memory.
 
 ## External API and privacy assumptions
 
@@ -196,24 +200,31 @@ through input-prefix construction, the actual witness generator, key decoding,
 H, point assembly, serialization and reviewed public signals. This proves what
 produced a returned result, not that every independently valid input succeeds.
 
-The proof-only workspace separately certifies the actual field primes and
-native field/inverse operations, exact-order admitted FFT roots, butterfly
-and two-point transform semantics, G1 add/double correspondence to Mathlib's
-elliptic-curve group, constructive G1 normalization, and the actual eight-limb
-Solidity codec. The codec still requires G2 affine normalization output.
-Only Num2Bits248 and DualMux have constructive original-input gadget results;
-other witness gadgets and global circuit construction remain unproved.
-The actual scalar loop maps to `(n % q) • P`, and to `n • P` for canonical
-scalars; this does not establish group/subgroup order. General FFT/H/QAP,
-G2 MSM/group and pairing correspondence remain open. The actual G1 windowed
-MSM now has original-input weighted-sum and normalization theorems; this does
-not establish the complete Groth16 point-assembly relation. These partial results do not prove universal
-Groth16 completeness or equivalence to deployed Ethereum verification.
+The [proof-only workspaces](../proofs/README.md) certify the actual field
+primes, extension towers, all admitted FFT/IFFT sizes, sparse H/QAP
+construction, G1/G2 groups and scalar/MSM loops, normalization, complete
+Groth16 assembly and exact eight-limb byte encoding. The reduced Tate pairing
+has derived bilinearity and a closed nontrivial-generator certificate. Native
+verifier completeness and scalar-equation equivalence are proved under
+explicit setup/key spans and the executable's finite-point conditions.
 
-There is no end-to-end zero-knowledge theorem for this prover implementation.
-Sampler distribution and worker confinement are narrower, reviewable pieces
-of that problem. The secret-bearing Lean arithmetic remains variable time
-and nonzeroizing. No funded transaction is part of the verification gate.
+The public circuit certificate and independent point-schedule gate run before
+secret input. Source-level witness constructions derive execution, ordered
+complete assignment and every R1CS check from explicitly stated original
+input conditions. `prepareInputPrefix_iff_source` proves those conditions
+characterize actual accepted inputs, including all path directions and the
+native parent computation. `native_construct_accepted_witness` constructs
+the complete canonical witness and every row check; its source-to-circuit
+Pedersen agreement is proved from the actual note bytes and public generator
+receipts, rather than assumed. Public digests authenticate bytes; they do
+not establish an honest setup or a deployed contract's identity.
+
+The conditional statistical theorem concerns proof output after valid
+admission, with all later failures counted. It is not full physical-process
+zero knowledge. The secret-bearing Lean arithmetic remains variable time and
+nonzeroizing; OS entropy, compiler/runtime behavior, side channels, truthful
+chain evidence and expected deployed contracts remain trust boundaries. No
+funded transaction is part of the verification gate.
 
 To review the specification, compare these rules with the linked definitions
 and theorem statements, then inspect the explicit assumptions. Run

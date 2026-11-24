@@ -114,10 +114,13 @@ private def appendMatch (length distance : Nat) : DecodeM Unit := do
   if distance == 0 || distance > state.output.size ||
       length > state.outputLimit - state.output.size then
     throw "Invalid or oversized DEFLATE backreference."
-  let mut output := state.output
+  -- Move the buffer out of decoder state before growing it. Retaining the
+  -- original state through the loop forces a full copy on every byte push.
+  let mut output ← modifyGet fun current =>
+    (current.output, { current with output := ByteArray.empty })
   for _ in [0:length] do
     output := output.push output[output.size - distance]!
-  set { state with output := output }
+  modify fun current => { current with output := output }
 
 private def reverseBits (value length : Nat) : Nat := Id.run do
   let mut bits := value

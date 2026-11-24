@@ -41,6 +41,7 @@ try {
   put('Main.lean','def syntheticPublicValue : Nat := 7\n');
   put('packages/lean-crypto/LeanCrypto/PublicSynthetic.lean','def syntheticPureValue : Nat := 11\n');
   put('proofs/LeanCryptoProofs/PublicSynthetic.lean','theorem syntheticPublicProof : 1 = 1 := rfl\n');
+  put('app-proofs/TornadoProofs/PublicSynthetic.lean','theorem syntheticApplicationProof : 2 = 2 := rfl\n');
   put('docs/BUILD_PROVENANCE.md','Public synthetic provenance scope.\n');
   put('docs/SECURITY_CONTRACTS.md','Public synthetic verification boundary.\n');
   put('.gitignore','.lake/\nreports/\n');
@@ -60,13 +61,14 @@ try {
   assert.equal(lean.status,0,lean.stderr);
   const inputs=['Main.lean','lakefile.lean','lake-manifest.json','lean-toolchain','native/synthetic.c',
     'packages/lean-crypto/LeanCrypto/PublicSynthetic.lean','proofs/LeanCryptoProofs/PublicSynthetic.lean',
+    'app-proofs/TornadoProofs/PublicSynthetic.lean',
     'docs/BUILD_PROVENANCE.md','docs/SECURITY_CONTRACTS.md','.gitignore',
     'scripts/verify.mjs','scripts/build-provenance.mjs','scripts/check-build-integrity.mjs',...assetNames];
   const artifacts=Object.fromEntries([['cli','.lake/build/bin/tornado'],['worker','.lake/build/bin/tornado_prover_worker']]
     .map(([role,path])=>[role,{path,sha256:hash(get(path)),size:get(path).length}]));
   const report={schemaVersion:1,status:'PASS_WITH_LIMITATIONS',runId:'00000000-0000-4000-8000-000000000001',
     startedAtUTC:new Date(Date.now()-5000).toISOString(),finishedAtUTC:new Date().toISOString(),
-    leanToolchain:'leanprover/lean4:v4.29.1',leanVersion:lean.stdout.trim(),nativeLeanSourceFiles:4,
+    leanToolchain:'leanprover/lean4:v4.29.1',leanVersion:lean.stdout.trim(),nativeLeanSourceFiles:5,
     inputHashes:Object.fromEntries(inputs.map(file=>[file,hash(get(file))])),pinnedProvingAssets:assets,
     buildArtifacts:artifacts,proofs:{theoremCount:1,noCustomAxiomsOrProofEscapes:true}};
   const writeReport=(value=report)=>put('reports/verify.json',JSON.stringify(value,null,2)+'\n');
@@ -90,6 +92,7 @@ try {
   assert.equal(manifest.verifiedInputs.some(x=>x.path==='.gitignore'),true);
   assert.equal(manifest.verifiedInputs.some(x=>x.path==='docs/BUILD_PROVENANCE.md'),true);
   assert.equal(manifest.sourceInventory.some(x=>x.path==='proofs/LeanCryptoProofs/PublicSynthetic.lean'),true);
+  assert.equal(manifest.sourceInventory.some(x=>x.path==='app-proofs/TornadoProofs/PublicSynthetic.lean'),true);
   assert.equal(manifest.sourceInventory.some(x=>x.path==='packages/lean-crypto/LeanCrypto/PublicSynthetic.lean'),true);
   assert.equal(JSON.stringify(manifest).includes('MUST NEVER EXECUTE'),false);
   checks++;
@@ -149,6 +152,7 @@ try {
   rejectRecord(x=>x.status='PROOFS_CHECKED_ONLY',/Fresh full/);
   rejectRecord(x=>x.status='FAIL',/Fresh full/);
   rejectRecord(x=>delete x.inputHashes['Main.lean'],/Unverified build source/);
+  rejectRecord(x=>delete x.inputHashes['app-proofs/TornadoProofs/PublicSynthetic.lean'],/Unverified build source/);
   rejectRecord(x=>x.nativeLeanSourceFiles++,/Lean source inventory differs/);
   rejectRecord(x=>x.inputHashes['../outside']='0'.repeat(64),/Unsafe relative input path/);
   rejectRecord(x=>x.inputHashes['.env']='0'.repeat(64),/Unsafe relative input path/);

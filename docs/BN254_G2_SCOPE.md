@@ -4,4 +4,19 @@
 
 [`tests/BN254G2.lean`](../tests/BN254G2.lean) checks 14 public scalar/addition outputs against [pinned noble vectors](../fixtures/bn254-g2-vectors.json), verifies the pinned generator has the expected scalar order, and rejects off-twist, out-of-field, and zero-inverse inputs. [`generate-bn254-g2-vectors.mjs`](../scripts/generate-bn254-g2-vectors.mjs) regenerates those vectors from the pinned TypeScript dependency; `--check` compares them byte for byte. These finite checks do not prove the full group law, subgroup membership of arbitrary decoded points, or equivalence for all inputs.
 
-This module provides G2 arithmetic to the complete isolated Lean prover; pairings, FFT, MSM, blinding and proof assembly live in separate modules. Its bigint operations are variable-time and do not zeroize secrets. Direct vectors and worker integration use public unfunded fixtures. Experimental commands use this implementation without a production secret-safety or side-channel guarantee.
+The [mathematical workspace](../proofs/README.md) additionally proves Fp2
+field interpretation and inverse construction, all admitted native G2
+add/double branches, total scalar multiplication, normalization, windowed MSM
+and exact generator order. Native operations map to Mathlib's elliptic-curve
+group; equality of normalized observations is derived from that group meaning.
+These are universal source-level results, beyond the finite vectors.
+
+Arbitrary decoded on-twist points are not automatically in the prime subgroup.
+The public pairing checks subgroup membership; honest query/key spans are
+explicit hypotheses in the assembly/verifier results. Field/group correctness
+does not establish setup honesty, discrete-log hardness or a deployed verifier.
+
+This module supplies the native prover and public pairing. Its bigint
+operations are variable time and do not zeroize secrets. Verification uses
+public unfunded fixtures; experimental commands have no production
+side-channel or secret-erasure guarantee.

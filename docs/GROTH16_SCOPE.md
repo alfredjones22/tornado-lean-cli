@@ -1,50 +1,88 @@
 # Tornado Groth16 scope
 
-The pinned CLI uses `micro-zk-proofs` through Kohaku's Tornado SDK. Its proving inputs contain a 31-byte nullifier, a 31-byte secret, a 20-level MiMC Merkle path, root, nullifier hash, recipient, relayer, fee, and refund. The SDK executes a legacy Circom JavaScript program to create a witness, parses a binary proving key, and then creates a randomized BN254 Groth16 proof. Native Lean creates and checks the full witness, assembles exact proof bytes for a public fixture with fixed test blinding, and verifies public proofs with a pairing equation. Experimental commands connect the isolated native worker and parent compiled-key verification. The prover is variable-time/nonzeroizing and is not a secret-safe production prover. Development uses public unfunded fixtures and submits no real or funded transaction.
+The native CLI implements the complete pinned Withdraw(20) proving route:
+31-byte nullifier and 31-byte secret, a 20-level MiMC path, six public signals,
+complete witness generation, sparse-key H calculation, BN254 point assembly,
+256-byte Solidity serialization, and compiled-key verification. The reference
+is `tornado-cli-new-era` at `a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326`,
+`@kohaku-eth/tornado-cash@0.1.0-alpha.40` and `micro-zk-proofs@0.3.1`.
+The runnable arithmetic is native Lean, variable time and nonzeroizing.
 
-## Implementation
+## What the kernel proofs establish
 
-[`Groth16R1CS.lean`](../Tornado/Protocol/Groth16R1CS.lean) parses the sparse `constraints` section of the pinned Circom JSON, parses a witness, and checks each equation `(A·w)(B·w) = C·w mod BN254 Fr`. It rejects out-of-range signal indices and coefficients, witness values outside the scalar field, a missing constant-one slot, and a witness of the wrong length. Two Lean theorems show that an accepted row has valid indices and that a successful individual constraint check satisfies the equation calculated by this native code. These are kernel-checked source properties, not cryptographic security proofs.
+The [mathematical workspace](../proofs/README.md) certifies the actual field
+primes and extension towers, both curve groups, native scalar/MSM loops and
+normalization, full FFT/IFFT and H/QAP construction, complete A/B/C assembly,
+and exact eight-word encoding. Native reduced Tate bilinearity is derived
+from curve functions and the actual Miller program. A closed public arithmetic
+trace certifies its generator result is nontrivial. The original verifier's
+scalar-equation equivalence and conditional completeness are proved on the
+specified generator spans and finite-point domain.
 
-[`groth16-tornado-r1cs.json`](../fixtures/groth16-tornado-r1cs.json) contains all **28,275** original Tornado constraints and a **28,300**-value witness generated once from the pinned SDK's legacy witness program. The input is the public `abandon`/`art` BIP39 test phrase's first mainnet 0.01 ETH note in a one-leaf tree, recipient `1`, zero relayer, fee, and refund. It is a public test vector with no funds. The native test checks every constraint, then confirms that a changed public Merkle root and malformed witness fail. The fixture itself is pinned by the verification report's SHA-256 and was derived from circuit hash `3ddd61dbff09caeec82d8edde95c674a3c34f9e66b1fe9f2c8783e72fe536f98` and key hash `8e2d2f22beafb5a9666daebca57b13f8029c3656c65fcfbcc86e2418fa16a3af`.
+The [application workspace](../app-proofs/README.md) connects actual primitive
+execution, all ordered signal phases, complete witness materialization and
+every R1CS row to explicit original-input source conditions. Its public gate
+regenerates local equations and checks their elimination against every pinned
+constraint, binds native generator/subgroup receipts to the circuit bases,
+and validates the complete independent point schedule before reading a note
+or entropy. The untrusted extractor and its JSON supply no mathematical axioms.
+See [witness scope](WITNESS_VM_SCOPE.md).
 
-[`WitnessVM.lean`](../Tornado/Protocol/WitnessVM.lean) translates the pinned Circom component graph into native Lean operations, assigns all 36,528 signals, emits all 28,300 witness slots, authenticates the decoded R1CS constraints, and checks all 28,275 equations. Four public full-witness cases pass, including one byte-for-byte match against the entire pinned SDK witness and a rightmost 20-level Merkle path. The [witness scope](WITNESS_VM_SCOPE.md) details the extractor/correspondence assumptions. These are runtime computations and finite tests, not a theorem that every possible input yields a valid witness.
+The remaining Pedersen refinement is discharged in
+`ReferenceProgramMeaning.referenceMeaning_construct`: exact original note
+bytes, all five signed-window segments, actual curve operations and the
+native hash coordinates agree. `InputInverse.prepareInputPrefix_iff_source`
+proves that those independent source conditions characterize the original
+input validator's successful results. Final witness or R1CS acceptance is
+not a source premise.
 
-[`Groth16Key.lean`](../Tornado/Protocol/Groth16Key.lean) validates the pinned proving key's 40-byte header and exact section boundaries. The native test checks the captured header against 28,300 variables, six public signals, a 32,768-point domain, and the 14,522,256-byte uncompressed key length, then rejects altered offsets and lengths. A kernel theorem states that a successfully decoded header passed the section-layout predicate. [`ProvingKey.lean`](../Tornado/Protocol/ProvingKey.lean) authenticates the full decompressed key hash and decodes every polynomial and G1/G2 point section with canonical field and on-curve/on-twist checks. Its full-key test also rejects a same-sized mutation. See [key scope](PROVING_KEY_SCOPE.md) for exact coverage and limits, including the missing G2 subgroup proof and trusted-setup assumption.
+The actual worker's proof output and failures factor through the ideal
+Groth16 triple. Under the documented source, setup and IID-byte hypotheses,
+its terminal distribution is within `2^-251` of an explicit witness-free
+reference distribution. The reference uses abstract setup trapdoor scalars;
+it is not an efficient public simulator or trapdoor-recovery program.
+See [blinding/output scope](PROOF_BLINDING_SCOPE.md).
 
-[`BN254G1.lean`](../Tornado/Protocol/BN254G1.lean) adds native base-field and G1 arithmetic. Public scalar and addition vectors match the pinned noble implementation.
-The separate mathematical workspace proves native field/G1 group operations,
-scalar multiplication with its implemented modulo-q semantics, constructive
-normalization and the actual G1 windowed weighted sum on successful inputs.
-G1 group/subgroup order remains unproved. It is variable-time and is not a secret-safe production prover. See [G1 scope](BN254_G1_SCOPE.md).
+## Finite independent evidence
 
-[`BN254G2.lean`](../Tornado/Protocol/BN254G2.lean) adds native Fp2 and G2 arithmetic. Fourteen public scalar/addition vectors match the pinned noble implementation, and the generator-order test passes. It remains variable-time and has no general G2 subgroup theorem. See [G2 scope](BN254_G2_SCOPE.md).
+Public fixtures check all 28,300 witness values against the pinned SDK and
+all 28,275 original constraints. Additional cases exercise different notes and
+a rightmost 20-level Merkle path. A complete public proof with fixed test
+blinding `r=1,s=2` matches all 256 SDK bytes and passes both native verification
+and an independent optimal-Ate check; every one-unit public-signal mutation
+is rejected. Other vectors cover arithmetic, roots, MSMs, a separate square
+circuit, malformed points, non-subgroup G2 points, canonical encodings and
+structural certificate mutations. These examples complement universal
+statements; they are not cryptographic security proofs.
 
-[`BN254PairingField.lean`](../Tornado/Protocol/BN254PairingField.lean), [`BN254TatePairing.lean`](../Tornado/Protocol/BN254TatePairing.lean), and [`BN254Groth16Verify.lean`](../Tornado/Protocol/BN254Groth16Verify.lean) implement a reference reduced Tate pairing and the Classic Groth16 four-pair equation. Three independent noble generator vectors match, and the pinned full-size public proof is accepted while changes to all six public signals are rejected. Seven Lean theorems cover successful inverse guards, nonzero prime-order pairing output, a divisible final exponent, and bounded public signals even after successful verification. They do not prove pairing correctness or Groth16 soundness. The generic verifier accepts a caller-supplied key; [`ClassicVerifyingKey.lean`](../Tornado/Protocol/ClassicVerifyingKey.lean) adds a compiled-in, checked key and a wrapper with no caller-key parameter. Two theorems constrain that wrapper. Funded use still requires deployed pool/verifier binding. See [pairing scope](BN254_PAIRING_STATUS.md) and [compiled key scope](CLASSIC_KEY_SCOPE.md).
+The pinned circuit's raw SHA-256 is
+`3ddd61dbff09caeec82d8edde95c674a3c34f9e66b1fe9f2c8783e72fe536f98`;
+the key's is `8e2d2f22beafb5a9666daebca57b13f8029c3656c65fcfbcc86e2418fa16a3af`.
+Hashes authenticate bytes, not setup honesty or deployed code.
 
-[`FrFFT.lean`](../Tornado/Protocol/FrFFT.lean) adds the pinned NQR-7 Fr FFT/IFFT and sparse A/B-to-H high-half calculation. Seven finite noble vectors, three sparse-H examples, and a full 32,768-point inverse roundtrip pass. The mathematical proofs now construct nonzero inverses and exact-order roots
-for every admitted size, plus the actual butterfly and two-point DFT/IFFT.
-General FFT/IFFT and H/QAP correctness remain unproved. See [FFT scope](FR_FFT_SCOPE.md).
+## Explicit boundaries
 
-[`Groth16MSM.lean`](../Tornado/Protocol/Groth16MSM.lean) adds checked windowed G1/G2 multi-scalar sums and Solidity proof serialization. A pure route joins authenticated graph, circuit, key, full witness and H, and returns points carrying a proof that the witness passed the native R1CS check. A compiled full-key public fixture produced the exact 256 proof bytes of the pinned SDK oracle with fixed test blinding. The component accepts caller-supplied blinding; the isolated worker samples fresh nonzero field values from kernel entropy. The complete proof pipeline checks every serialized proof against the compiled Classic key before returning its public result. Its original-input certificate traces successful results through the actual
-witness/H/point computations and exact returned bytes. The actual G1 windowed
-MSM has original-point/scalar weighted-sum and normalization theorems, and the
-actual eight-limb byte codec has construction and recovery proofs. G2
-normalization/MSM/group, full assembly/QAP and pairing correspondence remain
-open; no general Groth16 soundness claim follows. See [MSM scope](GROTH16_MSM_SCOPE.md) and [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
+- Setup/query/key relations, polynomial row alignment and degree bounds are
+  mathematical hypotheses, not consequences of a digest. Public artifact
+  comparisons provide additional finite evidence; the entire binary parser
+  and setup ceremony are not kernel-certified.
+- Native Tate is not formally identified with the implementation of
+  Ethereum's optimal-Ate precompile. Native verifier scalar equivalence is
+  algebraic correctness, not Groth16 knowledge soundness or cryptographic
+  hardness. The selected pool's deployed verifier remains an external boundary.
+- The executable rejects affine A/B/C or the public-input commitment at
+  infinity. Completeness states those finite-point conditions explicitly.
+  Privacy includes the resulting failures and does not guarantee a positive
+  release probability by itself; completeness is a separate result.
+- File/process/network effects, physical entropy, compiler/runtime behavior,
+  time, resources, crashes and secret erasure remain assumptions or outside
+  scope. The output theorem does not cover arbitrary malformed note parsing
+  or signing/metadata modes' cryptographic contents.
+- RPC root membership and unspentness do not authenticate Ethereum consensus.
+  The review/journal/exposure/receipt rules have their own selected source
+  proofs and fault tests; R1CS satisfaction alone establishes none of them.
 
-This is stronger than checking a tiny synthetic circuit: Lean generates and checks complete witnesses against the real complete R1CS. The finite vectors and source-graph translation still leave correspondence and implementation assumptions. A correct R1CS witness does not by itself create a Groth16 proof or show that the note is unspent on-chain.
-
-## Proof and trust limits
-
-- **Circuit correspondence:** The extracted graph and native primitive translations are tested against four public full witnesses, including an exact SDK witness and a rightmost Merkle path. Constructive Num2Bits248 and DualMux theorems cover actual stored graph slots
-  from original inputs without assuming final R1CS acceptance. There is still
-  no all-input equivalence theorem for the complete pinned Circom program.
-- **Key and circuit trust:** Native code authenticates the compressed assets and decoded key, and offline checks compare the complete verification key with immutable vendored Solidity source. Trusted-setup security, arbitrary decoded G2 subgroup membership and the selected pool's deployed verifier identity are not established by those checks.
-- **Groth16 arithmetic and secrets:** Native field/G1 group/scalar/windowed-MSM,
-  normalization and fixed-limb codec results are proved under their stated
-  admission conditions. General FFT/H/QAP, G2 normalization/MSM/group, pairing
-  and reduced-Tate/optimal-Ate correspondence remain unproved. The prover and note-derived signer use variable-time Lean arithmetic and do not guarantee secret erasure. Fresh blinding alone does not remove these limitations.
-- **Effectful safety:** Experimental commands bind reviewed public inputs, recheck roots and spent status, reserve attempts before exposure, and reconcile exact receipts/events. Their concrete file/process/network effects have fault tests, but no end-to-end refinement theorem connecting every execution to the fund-safety specification. R1CS satisfaction alone establishes none of these operational properties.
-
-The executable connects one-note and batch withdrawals through the isolated native Lean worker, including Classic relayer and 4337 routes. They require explicit experimental mode and typed review. Development proof runs use public, unfunded fixtures; no real or funded transaction was submitted. This implementation and its selected theorems do not establish complete CLI parity or production fund safety.
+Verification uses public, unfunded fixtures and synthetic local EVM state.
+No real or funded transaction is part of the gate. See the
+[security specification](WITHDRAWAL_SECURITY_SPEC.md),
+[verification instructions](VERIFICATION.md) and [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).

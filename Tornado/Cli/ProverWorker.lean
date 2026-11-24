@@ -6,7 +6,7 @@ import Tornado.Runtime.WorkerProgram
 
 /-!
 The actual isolated worker is a restricted effect program. Only the selected
-note/request and three pinned asset slots may be read, and entropy is requested
+note/request and four pinned asset slots may be read, and entropy is requested
 only in proof mode. All parsing, note derivation, signing and proving below
 are pure Except computations. The native interpreter owns the OS boundary.
 Variable-time secret math, secret-dependent failure/timing and retained managed
@@ -233,7 +233,8 @@ def proofProgram (noteIndex : Option String) (request : Request) :
   let circuit ← WorkerProgram.read (.asset .circuit) rfl
   let key ← WorkerProgram.read (.asset .key) rfl
   let graph ← liftExcept <| text (← WorkerProgram.read (.asset .graph) rfl)
-  let assets ← liftExcept <| ClassicProofPipeline.loadBundled circuit key graph
+  let witnessCertificate ← WorkerProgram.read (.asset .witnessCertificate) rfl
+  let assets ← liftExcept <| ClassicProofPipeline.loadBundled circuit key graph witnessCertificate
   let selected ← selectedProgram chain noteIndex
   let note ← liftExcept <| noteForRequest selected request
   let path : MimcProof := ⟨request.leafIndex, request.root,
@@ -297,6 +298,7 @@ theorem proofProgram_returns_native_construction (noteIndex : Option String) (re
     obtain ⟨key, _, returned⟩ := sourceReturns_bind _ _ _ returned
     obtain ⟨graphBytes, _, returned⟩ := sourceReturns_bind _ _ _ returned
     obtain ⟨graph, _, returned⟩ := sourceReturns_bind _ _ _ returned
+    obtain ⟨witnessCertificate, _, returned⟩ := sourceReturns_bind _ _ _ returned
     obtain ⟨assets, _, returned⟩ := sourceReturns_bind _ _ _ returned
     obtain ⟨selected, _, returned⟩ := sourceReturns_bind _ _ _ returned
     obtain ⟨note, _, returned⟩ := sourceReturns_bind _ _ _ returned

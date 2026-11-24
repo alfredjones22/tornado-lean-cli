@@ -3,12 +3,14 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { assertOracleIdentity, oracleCommit, oracleSource } from './oracle-identity.mjs'
 
 // Development-only public toy setup. Its toxic scalars are deliberately
 // public; it must never be reused as a production ceremony or proving key.
 const repository = fileURLToPath(new URL('../', import.meta.url))
-const source = resolve(repository, '../tornado-cli-new-era')
-const sourceCommit = 'daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7'
+const source = oracleSource
+const sourceCommit = oracleCommit
+assertOracleIdentity(source)
 if (execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== sourceCommit)
   throw new Error('The pinned TypeScript oracle checkout moved')
 const micro = resolve(source, 'node_modules/micro-zk-proofs')

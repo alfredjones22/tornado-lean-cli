@@ -83,13 +83,32 @@ retains the common retry-exhaustion outcome in the observation and denominator;
 it does not silently condition on success. A common deterministic observer may
 also reject or fail on the ideal triple.
 
-This is not yet a distribution theorem for the complete worker's released
-bytes. The remaining witness-gadget/QAP/proof-assembly/G2-MSM/pairing computation and
-all additional worker failures and releases have not been proved to factor
-through that ideal triple. The proved G1 group/scalar/windowed-MSM, normalization and fixed-limb codec
-results alone do not supply this factorization. OS/backend distribution
-coupling is also unproved. No implementation zero-knowledge, failure
-noninterference, constant-time or erasure claim follows.
+The [application workspace](../app-proofs/README.md) now connects the original
+native point assembly and exact byte serializer, all normalization and
+compiled-key acceptance outcomes, request validation, and worker terminal
+output to that same ideal observation. `WorkerPrefix.original_worker_output_privacy`
+proves a bound of at most `2^-251` for every event of the original proof
+program's stdout, stderr and exit status, for two independently admitted
+input prefixes with the same public setup and signals. Its explicit
+`ExecutionSource` conditions include original witness construction and the
+honest query/QAP relations. Read those hypotheses before interpreting the
+result. Later proof failures and entropy exhaustion remain in the distribution;
+they are not conditioned away.
+
+The native witness premise now has a source construction:
+`NativeWitnessConstruction.native_construct_accepted_witness` derives it
+from actual input acceptance, including the original note bytes and native
+20-parent membership path. The source wrapper constructs this witness before
+connecting it to a context. Key decoding, H construction and honest
+query/setup relations for the later stages remain explicit; the wrapper does
+not certify arbitrary keys or automatically prove every setup relation.
+
+This does not establish universal successful input admission, malicious-setup
+security, arbitrary note-parser privacy, or other worker modes' cryptographic
+output privacy. OS/backend distribution coupling, physical partial writes,
+timing, resource use, crashes and erasure remain outside the result. It is a
+conditional statistical proof-output theorem, not full physical-process zero
+knowledge or a guarantee of secret-safe execution.
 
 The connected experimental worker uses this sampler for fresh proof blinding.
 The current native prover still uses variable-time bigint and elliptic-curve arithmetic, and

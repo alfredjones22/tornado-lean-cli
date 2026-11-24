@@ -1,6 +1,6 @@
 {
-  "sourceCommit": "daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7",
-  "sdk": "@kohaku-eth/tornado-cash@0.1.0-alpha.38",
+  "sourceCommit": "a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326",
+  "sdk": "@kohaku-eth/tornado-cash@0.1.0-alpha.40",
   "prover": "micro-zk-proofs@0.3.1 with NQR 7 and noble BN254",
   "provingKeySHA256": "8e2d2f22beafb5a9666daebca57b13f8029c3656c65fcfbcc86e2418fa16a3af",
   "publicWitnessFixtureSHA256": "10364ef4ca2a0436435ee40d2cd1376b2dd1c5d79278e8addabcbae38b56920c",

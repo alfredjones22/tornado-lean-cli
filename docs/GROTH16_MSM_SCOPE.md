@@ -19,15 +19,21 @@ independently using the pinned noble BN254 package. The
 [`Groth16MSM.lean` test](../tests/Groth16MSM.lean) checks those values and thirteen
 rejection cases. The extractor's `--check` mode reproduces the fixture.
 
-The [mathematical workspace](../proofs/README.md) additionally proves the actual
-private bucket-fill, bucket-collapse and Horner/window algorithm and transports
-it to the native G1 group representation. For every successful public `msmG1`
-call, `msmG1_success_sum` retains the original ordered point decoding, equal
-counts and canonical original scalars, and proves the result is their exact
-mathematical weighted sum. `msmG1_success_normalized_sum` constructs the actual
-optional affine normalization of the same sum. It does not assume a final
-normalization or proof-verifier success. These G1 results do not prove G2
-MSM/group semantics, G1 subgroup order or the complete Groth16 assembly relation.
+The [mathematical workspace](../proofs/README.md) proves the actual bucket
+fill, collapse and Horner/window algorithms for both G1 and G2, transports
+them to Mathlib elliptic-curve groups, and constructs their native
+normalizations. The exact generator orders are derived from unreduced
+subgroup calculations and certified prime orders; reducing the scalar first
+is not used as an order certificate.
+
+[`AssemblySource`](../proofs/LeanCryptoProofs/AssemblySource.lean) constructs
+the original `assemble` return from independently valid ordered key points,
+matching dimensions and canonical scalars.
+[`AssemblyFormula`](../proofs/LeanCryptoProofs/AssemblyFormula.lean) and
+[`AssemblyScalars`](../proofs/LeanCryptoProofs/AssemblyScalars.lean) prove the
+complete A/B/C formulas, including private C offsets, H prefixes and the
+negative-rs term. Their `KeySpan` assumption states the mathematical meaning
+of the actual key points.
 
 `solidityProofBytes` normalizes the three proof points, rejects infinity,
 and emits the Classic verifier's exact 256-byte order: A x/y; B x.c1/x.c0,
@@ -35,8 +41,11 @@ y.c1/y.c0; C x/y. A pinned SDK-shaped synthetic proof vector checks every
 output byte and three of the rejection cases. `ProofCodec` also proves the
 actual private word loop's fixed-width construction, 256-byte length and
 recovery of all eight ordered limbs. `NormalizedProofCodec` discharges finite
-G1 A/C normalization from curve conditions; G2 affine normalization remains
-an explicit premise. These are not verifier-parser or pairing theorems.
+G1 A/C normalization from curve conditions. The corresponding G2 construction
+and representation uniqueness now discharge G2 normalization as well.
+[`ProofObservation`](../proofs/LeanCryptoProofs/ProofObservation.lean) proves
+that the actual coordinates and exact serializer result, including failures,
+factor through the three mathematical group scalars.
 
 `deriveCheckedProofPoints` is the pure authenticated-artifact route: it takes
 the private-constructor pinned graph, circuit, and key types, generates and
@@ -45,10 +54,15 @@ with the native NQR-7 FFT, and assembles proof points from explicit `r` and
 `s` blinding values. Its return type carries a kernel-visible proof that the
 same returned witness passed all 28,275 native R1CS equations. Original-input provenance theorems trace a successful result through that
 same witness generator, decoded key, H calculation and actual assembly.
-The G1 field/group/scalar/windowed-MSM and byte-codec results are established
-separately. General FFT/H/QAP, G2 MSM/group, pairing and the full Groth16
-algebraic relation remain unproved. See [proof scope](PROOF_SCOPE.md) for the
-precise distinctions and imported-dependency trust boundary.
+The actual FFT/H, both curve groups, complete assembly and bilinear pairing
+results are connected by
+[`assembly_qap_verifies`](../proofs/LeanCryptoProofs/VerifierCompleteness.lean).
+It constructs native verifier acceptance from the honest setup/query/key
+relations and the QAP equation, without assuming successful pairing or
+verification. Finite A/B/C and a nonzero public-input commitment are explicit
+conditions because the executable rejects infinity. This is conditional
+completeness, not cryptographic soundness, deployed-verifier equivalence or
+proof that a hash-pinned setup is honest. See [proof scope](PROOF_SCOPE.md).
 
 The compiled full 28,300-signal public test in
 [`Groth16MSMFull.lean`](../tests/Groth16MSMFull.lean) authenticates the pinned
@@ -78,7 +92,7 @@ The arithmetic is variable-time and does not zeroize secrets. The connected
 experimental worker samples fresh blinding from kernel entropy, authenticates
 assets, checks the witness and verifies the serialized public proof. Parent
 adapters bind reviewed inputs and revalidate known roots and spent status.
-Those checks do not prove side-channel safety, all arithmetic, trusted-setup
+Those checks do not prove side-channel safety, trusted-setup
 soundness or deployed verifier identity. Development uses public unfunded
 fixtures only. Production secret safety and deployed-code authentication are
 not established.

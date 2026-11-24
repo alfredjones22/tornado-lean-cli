@@ -13,7 +13,12 @@ exact bundled compressed circuit and proving key. It decompresses both assets
 with native Lean gzip, checks their compressed and raw SHA-256 digests, parses
 the full R1CS, checks its 28,275 constraints against the pinned canonical
 digest, and returns the private-constructor pinned graph, circuit, and key
-values. A wrong graph digest fails before decompression.
+values. A wrong graph digest fails before decompression. The fourth asset is
+a bounded public witness derivation certificate. Before reading a note or
+entropy, the worker checks it against every pinned R1CS row, binds circuit
+bases to actual native generator/subgroup receipts and validates the complete
+independent signed-window point schedule. The certificate extractor is
+untrusted and no expanded DAG/transcript is retained for secret computation.
 
 `prove` takes those authenticated assets, a native `WithdrawalInput`, and
 explicit nonzero canonical Fr blinding scalars. It checks the note commitment,
@@ -35,11 +40,21 @@ equation, and public signals. `prove_success_from_original` and
 the original assets, withdrawal input and supplied `r,s`, through the actual
 input prefix, witness generator, key decoder, H calculation, point assembly
 and exact returned bytes. This is execution provenance, not a claim that every
-valid input succeeds or that the computed H satisfies a QAP identity. Their
+valid input succeeds. The separate source construction, FFT/H/QAP, assembly
+and native verifier theorems establish their stronger conditional mathematical
+claims; see [proof scope](PROOF_SCOPE.md). Their
 axiom reports contain only Lean's standard `propext`, `Classical.choice`, and
 `Quot.sound`. Neither the input note nor the checked witness is a runtime field
 of the public result. The computation still holds secret intermediates in
 memory while running and does not zeroize them.
+
+The witness source predicate now characterizes actual successful input
+validation in both directions. Its Pedersen bridge derives all point-operation
+domains and exact original commitment/nullifier identities from the native
+note bytes and checked public bases. This removes a caller-supplied
+native-to-circuit agreement premise from witness construction. Key decoding,
+row alignment, honest setup and finite-point conditions for the later proof
+stages remain explicit boundaries.
 
 ## Validation
 
@@ -51,24 +66,21 @@ Classic verifier to accept it. The accompanying theorem certifies that the
 complete 28,300-slot witness passed all 28,275 R1CS constraints. The separate
 `groth16_full_public_test` compares that full witness with the pinned SDK fixture.
 This pipeline test also checks wrong graph digest, zero/out-of-field blinding,
-and wrong expected Merkle root. The compiled public-only run passed in
-**284,439 ms** in a recorded test run:
-
-```text
-PASS: authenticated compressed assets, complete public witness, 256-byte SDK proof parity, and compiled-key pairing verification (284439 ms)
-```
+and wrong expected Merkle root. The public-certificate test independently
+checks size/integrity/topology, native base bindings and 15 schedule cases,
+including 13 adversarial structural mutations. Current timings and exact source
+hashes belong to the generated verification report, not to a portability claim.
 
 ## Trust and production limits
 
-- The separate [mathematical workspace](../proofs/README.md) proves native
-  field, G1 group/scalar/windowed-MSM, normalization and fixed-limb codec
-  properties. Successful G1 MSM results are exact weighted sums of the original
-  decoded points and canonical scalars. General FFT/H/QAP, G2 MSM/group,
-  pairing and complete Groth16 algebraic correctness remain open, as do
-  SHA-256 and DEFLATE correctness/security, complete witness-gadget/Circom
-  correspondence and
-  reduced-Tate versus EIP-197 optimal-Ate equivalence. The full fixture is one
-  finite compatibility case; see [proof scope](PROOF_SCOPE.md).
+- The separate [proof workspaces](../proofs/README.md) prove actual source
+  arithmetic, complete transforms, both groups/MSMs, assembly, native pairing
+  bilinearity/nondegeneracy and conditional verifier correctness. The
+  application constructs witness execution and every row from explicit
+  original-input conditions. A digest does not establish honest setup/query
+  relations, and SHA/DEFLATE correctness/security, generic Circom/JavaScript
+  translation and deployed EIP-197 implementation correspondence are separate
+  boundaries. The full fixture remains finite evidence.
 - The native `Nat`/big-integer, elliptic-curve, FFT, and pairing operations are
   variable-time and do not zeroize secret material. The API accepts explicit
   `r,s`; it does not securely sample fresh blinding scalars. Fixed fixture

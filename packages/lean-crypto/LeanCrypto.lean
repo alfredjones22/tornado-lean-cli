@@ -27,3 +27,4 @@ import LeanCrypto.Groth16.Types
 import LeanCrypto.Groth16.FFT
 import LeanCrypto.Groth16.MSM
 import LeanCrypto.Groth16.Verify
+import LeanCrypto.Groth16.ConstraintCertificate

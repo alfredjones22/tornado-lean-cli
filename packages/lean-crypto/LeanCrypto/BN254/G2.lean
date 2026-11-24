@@ -103,17 +103,17 @@ def Jacobian.add (left right : Jacobian) : Jacobian := Id.run do
   let z := (left.z.mul right.z).mul h
   return ⟨x, y, z⟩
 
-/-- This intentionally does not reduce the scalar modulo Fr: a later
-    subgroup checker can test `[Fr]P = 0` without making that check vacuous. -/
-def Jacobian.scalarMul (point : Jacobian) (scalar : Nat) : Jacobian := Id.run do
-  let mut factor := point
-  let mut n := scalar
-  let mut result := Jacobian.infinity
-  while n > 0 do
-    if n % 2 == 1 then result := result.add factor
-    factor := factor.double
-    n := n / 2
-  return result
+/-- Total binary scalar multiplication, retaining the original add/double/
+halve update order. The scalar is never reduced modulo Fr. -/
+def Jacobian.scalarMulLoop (factor : Jacobian) (scalar : Nat) (accumulator : Jacobian) : Jacobian :=
+  if zero : scalar = 0 then accumulator
+  else Jacobian.scalarMulLoop factor.double (scalar / 2)
+    (if scalar % 2 = 1 then accumulator.add factor else accumulator)
+termination_by scalar
+decreasing_by exact Nat.div_lt_self (Nat.pos_of_ne_zero zero) (by decide)
+
+def Jacobian.scalarMul (point : Jacobian) (scalar : Nat) : Jacobian :=
+  Jacobian.scalarMulLoop point scalar Jacobian.infinity
 
 def Jacobian.toAffine (point : Jacobian) : Except String (Option Affine) := do
   if point.isInfinity then return none

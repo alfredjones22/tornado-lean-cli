@@ -4,9 +4,11 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync,
   symlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertOracleIdentity } from './oracle-identity.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const cli = resolve(process.env.TORNADO_TS_CLI ?? resolve(root, '../tornado-cli-new-era'))
+assertOracleIdentity(cli)
 const lean = resolve(root, '.lake/build/bin/tornado')
 const ts = resolve(cli, 'bin/tornado.mjs')
 const expectedDistHash = 'cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809'

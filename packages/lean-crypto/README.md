@@ -69,14 +69,21 @@ square circuit and changed-input rejection. These are executable compatibility
 checks, not complete proofs of the cryptographic algorithms or their security.
 
 The separate [proof-only workspace](../../proofs/README.md) uses pinned Mathlib
-to relate selected actual native functions to fields, roots, a two-point DFT,
-the G1 elliptic-curve group, constructive normalization and the eight-limb
-Solidity byte codec. The actual windowed G1 MSM has original-input weighted-sum
-and normalization theorems. The workspace also proves arbitrary-event sampler-to-field transport
-and an ideal observation bound. The production package still has no Mathlib
-dependency. Complete witness-gadget correspondence, group/subgroup order,
-general FFT/H/QAP, G2 MSM/group/pairing and
-the complete worker's observation distribution remain outside those results.
+to prove source-level native field and extension-tower arithmetic, complete
+FFT/IFFT and H/QAP construction, G1/G2 group/scalar/MSM and normalization,
+complete Groth16 assembly, exact fixed-limb serialization, and native reduced
+Tate bilinearity. `VerifierCompleteness.assembly_qap_verifies` constructs
+native verifier acceptance from honest setup/query/key relations and original
+QAP equations, with the executable's explicit finite-point conditions.
+
+It also proves exact sampler-to-field event transport and a statistical
+proof-output observation bound; the parent application separately connects
+its actual proof worker's output under its stated source assumptions. The
+portable runtime package has no Mathlib dependency. Setup honesty, deployed
+Ethereum verifier equivalence, cryptographic hardness, arbitrary command
+correctness, OS effects and side-channel safety are not established by these
+algebraic results.
+
 
 The byte/hex/sampling/counting theorems are kernel checked. Every theorem lists
 its axioms, limited to Lean's standard axioms. There are no custom axioms,

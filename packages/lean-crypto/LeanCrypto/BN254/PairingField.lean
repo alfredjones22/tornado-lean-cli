@@ -94,15 +94,16 @@ def Fp12.mul (a b : Fp12) : Fp12 :=
 
 def Fp12.square (a : Fp12) : Fp12 := a.mul a
 
-def Fp12.pow (a : Fp12) (exponent : Nat) : Fp12 := Id.run do
-  let mut n := exponent
-  let mut base := a
-  let mut result := Fp12.one
-  while n > 0 do
-    if n % 2 == 1 then result := result.mul base
-    base := base.square
-    n := n / 2
-  return result
+/-- Total binary exponentiation with the original multiply/square/halve order. -/
+def Fp12.powLoop (base : Fp12) (exponent : Nat) (accumulator : Fp12) : Fp12 :=
+  if zero : exponent = 0 then accumulator
+  else Fp12.powLoop base.square (exponent / 2)
+    (if exponent % 2 = 1 then accumulator.mul base else accumulator)
+termination_by exponent
+decreasing_by exact Nat.div_lt_self (Nat.pos_of_ne_zero zero) (by decide)
+
+def Fp12.pow (value : Fp12) (exponent : Nat) : Fp12 :=
+  Fp12.powLoop value exponent Fp12.one
 
 /-- Checked inversion in Fp12; no unproved primality axiom is used. -/
 private def Fp12.inverseCandidate (a : Fp12) : Except String Fp12 := do

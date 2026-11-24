@@ -78,15 +78,14 @@ Both are useful, and the evidence must identify which statement is proved.
 For witness/proof construction, validity names the note relation, Merkle path,
 public statement, field bounds, circuit and required key/setup relations.
 Field, curve, polynomial, witness, serialization and verifier correspondence
-are separate implementation obligations. The current proof workspace closes
-specified native field, G1 add/double/normalization, root/butterfly/two-point
-and fixed-limb encoding results. Successful actual G1 windowed MSM calls now
-have exact original-input weighted-sum and normalization theorems. General
-witness-gadget correspondence, FFT/H/QAP, group/subgroup order, G2 MSM/group
-and pairing correspondence remain
-unclosed. A pinned digest authenticates bytes;
-it does not establish the mathematical relationship between a circuit and
-the key's polynomial/query tables or establish an honest ceremony.
+are separate implementation obligations. The proof workspaces close actual native field towers, both curve groups,
+scalar/MSM and normalization loops, complete transforms and H/QAP,
+assembly, byte encoding and native pairing/verifier correspondence under
+their precise source/key/domain conditions. Public derivation certificates
+and point schedules connect the actual witness program to the full pinned
+R1CS. A digest authenticates bytes; it does not establish the mathematical
+setup/query relations or an honest ceremony. See the
+[readable specification](WITHDRAWAL_SECURITY_SPEC.md) and [proof scope](PROOF_SCOPE.md).
 
 ## Allowed disclosures and entropy
 
@@ -107,9 +106,12 @@ independent of note/witness values. The actual fixed-width decoder bijection,
 canonical scalar-to-field bijection and arbitrary-event sampler pushforward
 are proved. Under this source contract, compatible ideal witness offsets
 satisfy an explicit nonzero-mask observation bound with common retry failure
-included. The full worker's released observations and additional failures
-are not proved to factor through that ideal model. OS randomness remains a
-boundary assumption. Timing, allocation, crashes and
+included. The actual proof program's native output and later failures now
+factor through that triple under explicit original source and setup
+hypotheses, with a `2^-251` event bound against a witness-free reference.
+Privacy alone does not guarantee proof release; completeness is separate.
+The reference uses abstract setup trapdoors. OS randomness remains a boundary
+assumption. Timing, allocation, crashes and
 memory remnants require a separate threat model; the current variable-time,
 nonzeroizing Lean arithmetic has no such secrecy certificate.
 

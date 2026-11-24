@@ -7,8 +7,11 @@ vectors: certified prime facts close native Fp inverse construction, and admitte
 G1 representations map actual add/double to Mathlib's elliptic-curve group.
 Actual normalization constructs the same group point. The total scalar loop
 represents `(n % q) • P`, or `n • P` for canonical `n < q`; this does not prove
-G1 group/subgroup order. The actual windowed G1 MSM also has original ordered
-point/scalar weighted-sum and normalization theorems. G2 and full Groth16
-correspondence remain separate; see [proof scope](PROOF_SCOPE.md).
+arbitrary-input scalar semantics beyond that implemented reduction. The
+exact generator order is separately proved using the unreduced backend and
+certified prime order. The actual windowed G1 MSM has original ordered
+point/scalar weighted-sum and normalization constructions. G2 and complete
+Groth16 assembly/verifier results are connected in the separate mathematical
+workspace; see [proof scope](PROOF_SCOPE.md).
 
 This module is an arithmetic building block used by the isolated Lean prover. Its direct vectors use public points; worker integration uses public unfunded proof fixtures. Arithmetic is variable-time and does not zeroize secrets. Secret erasure and side-channel safety are outside current verification coverage, including for experimental live commands.

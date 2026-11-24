@@ -64,63 +64,74 @@ The direct one-note policy theorems prove that signing binds the reviewed hash; 
 constructive Num2Bits248 and DualMux results start from original inputs,
 graph-slot bounds and compatible aliases, assign the actual stored signals,
 establish their equations and preserve existing assignments. They do not
-assume the final R1CS checker succeeded. Other gadgets and global circuit
-correspondence remain separate obligations. A separate public fixture produces exact proof bytes, but these theorems do not prove proof-generation correctness or Circom-to-Lean equivalence for every possible input. See [Groth16 scope](GROTH16_SCOPE.md).
+assume the final R1CS checker succeeded. The application proof workspace additionally constructs the other primitive
+rows, actual ordered execution, full witness and every R1CS check from its
+explicit original-input arithmetic source conditions and public derivation
+certificate. General Circom/JavaScript translation correctness is not claimed. See [Groth16 scope](GROTH16_SCOPE.md).
 
 `Protocol/TornadoWitness.lean` computes the first 49 input slots natively, after checking note preimages, the nullifier hash, a 20-level MiMC path, and a caller-supplied expected root. Four theorems cover prefix length and selected slot positions, and a pinned full-witness fixture checks all 49 slots. `WitnessVM.lean` fills the remaining slots as described above. The expected root is not authenticated against chain history here; see [witness scope](WITNESS_SCOPE.md).
 
 `Protocol/Groth16Key.lean` rejects any key header whose dimensions or section offsets differ from the pinned proving key and proves that a successful parse satisfies its layout predicate. `Protocol/ProvingKey.lean` authenticates the full uncompressed digest and parses every key section, validating G1 curve and G2 twist equations, canonical field encodings, and polynomial bounds. It does not establish G2 subgroup membership, trusted-setup security, or proof production; see [key scope](PROVING_KEY_SCOPE.md).
 
 The application BN254 and Groth16 modules alias the canonical `LeanCrypto`
-implementations. The separate [proof workspace](../proofs/README.md) proves
-numerical primality of the actual base/scalar moduli using kernel-checked
-certificates. `FpModel` and `FrModel` relate native addition, subtraction,
-multiplication and total binary exponentiation to `ZMod`; the closed prime
-facts construct the actual checked inverse for every nonzero modeled input.
-These are mathematical implementation results, beyond finite vector parity.
+implementation. The separate [mathematical workspace](../proofs/README.md)
+certifies the actual field and subgroup primes; native modular arithmetic,
+inverses and exponentiation; Fp2/Fp6/Fp12 field models; all G1/G2 addition,
+doubling, scalar, normalization and MSM branches; and exact generator orders
+from unreduced calculations. Representation equality is after mapping to the
+mathematical group, with normalization uniqueness connecting observations.
 
-`JacobianModel`, `G1GroupLaw`, `JacobianNormalization` and
-`NormalizationGroupLaw` handle admitted G1 representations: canonical native
-infinity, or a finite point with nonzero Z and `Y² = X³ + 3Z⁶`. Actual native
-addition and doubling map to addition in Mathlib's proved elliptic-curve group,
-including equal, opposite and infinity branches. Actual normalization
-constructs an on-curve affine result or canonical infinity and represents that
-same group point, without a normalization-success premise. The group laws
-hold after mapping representations, not as equality of arbitrary raw Jacobian
-coordinate triples. The total native scalar loop preserves admission and maps to
-`(n % q) • P`, where `q` is the BN254 scalar prime; for canonical
-`n < q` it maps to `n • P`. This does not prove
-G1 group/subgroup order or remove the modulo restriction for arbitrary n.
-The actual windowed G1 MSM is also connected to its mathematical weighted sum.
-The proof covers the private bucket-fill, bucket-collapse and Horner/window
-algorithm, then transports it through the native G1 group representation.
-`msmG1_success_sum` binds a successful public call to the exact ordered decoding
-of the original point array, equal point/scalar counts, canonical original
-scalars, an admitted result and the sum of each original scalar times its
-decoded point. The theorem states weights modulo q; the accepted scalars are
-already below q. `msmG1_success_normalized_sum` constructs actual normalization
-of that result as the same mathematical sum, possibly infinity. These are
-G1 MSM semantics on accepted inputs, not G2 MSM, subgroup-order or full Groth16
-point-assembly correctness.
-No constant-time, erasure, pairing or Groth16 security claim follows.
+`FFT/NativeTransform` constructs the actual forward/inverse DFT and roundtrip
+for every admitted power-of-two size through 65,536. `FFT/HConstruction`
+constructs sparse accumulation, transforms, convolution and trimming and
+proves H fits the domain-minus-one query. Independent original row equations,
+polynomial degrees and sparse-table alignment derive the QAP quotient;
+neither a quotient nor verifier success is assumed. The offline full-key
+matrix check is finite artifact evidence, not a kernel parser proof.
 
-`RootConstruction` constructs canonical roots of exact multiplicative order
-for every admitted FFT size, the powers of two through 65,536. `ButterflyModel`
-proves the actual indexed butterfly's field meaning and preservation properties;
-`TwoPointModel` proves the actual forward and normalized inverse two-point
-DFT. These results do not prove the general transform, H-polynomial derivation,
-QAP/key/circuit relation or universal proof-construction success.
+The assembly modules construct the original native return from ordered valid
+key points, dimensions and canonical scalars and prove the complete Groth16
+A/B/C formulas. Normalization and exact eight-word serialization, including
+failures, factor through the ideal group-scalar triple. Public key spans and
+the honest setup/query relation are explicit; hashing a key does not prove
+them. See [MSM scope](GROTH16_MSM_SCOPE.md).
 
-`ProofCodec` connects the actual private serializer word loop to fixed-width
-big-endian encoding. Given admitted affine normalization outputs, the actual
-Solidity serializer constructs 256 bytes, and a structural decoder recovers
-all eight ordered limbs, including the G2 `c1,c0` order. That limb encoding is
-injective and retains leading zeros. `NormalizedProofCodec` discharges the
-G1 A/C normalization premises from their independent finite curve equations;
-it still requires an actual G2 affine normalization output. This is not a
-G2-normalization, verifier-parser, or ideal-triple-to-proof-bytes theorem.
+The Tate modules derive field embeddings, line functions, actual Miller
+execution and both pairing addition laws. A public arithmetic trace certifies
+the actual generator result is nontrivial. `VerifierScalarEquivalence.verify_scalar_iff`
+proves the original native verifier accepts exactly when the scalar equation
+holds, on its specified generator spans and finite canonical input domain.
+`VerifierCompleteness.assembly_qap_verifies` derives native acceptance from
+assembly and QAP equations with honest proving/verifying-key relations.
+These are algebraic implementation results, not cryptographic knowledge
+soundness or equivalence to deployed EIP-197 code. See
+[pairing scope](BN254_PAIRING_STATUS.md).
 
-`Protocol/BN254G2.lean` adds quadratic-extension and twist G2 arithmetic. Fourteen pinned noble scalar/addition vectors and a generator-order check pass, but no arbitrary-point subgroup theorem exists; see [G2 scope](BN254_G2_SCOPE.md). `BN254PairingField.lean`, `BN254TatePairing.lean`, and `BN254Groth16Verify.lean` add a public-point reduced Tate pairing and the Classic four-pair equation. Seven theorems cover executable inverse, output-order, and signal-bound guards. A pinned full-size public proof passes and all six changed signals fail. They do not establish extension-field laws, Miller-loop correctness, Groth16 soundness, or optimal-Ate correspondence; see [pairing scope](BN254_PAIRING_STATUS.md).
+The BabyJubJub modules prove native field/inverse and complete Edwards point
+construction, actual Montgomery charts and group addition, signed-window
+bounds and noncollision conditions. The public gate checks the actual native
+generators' curve/subgroup receipts, exact circuit-base binding, every point
+operation in an independent signed-window schedule, and the full public
+linear-elimination certificate against the pinned R1CS. The source-level
+witness modules construct actual execution, complete ordered materialization
+and every row check from explicitly stated arithmetic source conditions;
+they do not assume final witness or R1CS acceptance.
+
+`ReferenceProgramMeaning.referenceMeaning_construct` discharges the Pedersen
+source refinements from original valid note/path facts and the actual public
+generator receipts: it proves all segment domains and exact commitment and
+nullifier hash agreement. `InputInverse.prepareInputPrefix_iff_source` proves
+the independent source predicate is equivalent to actual input acceptance.
+These statements use the original validator and compiler rather than a
+caller-supplied successful witness or a replacement execution model.
+
+`NativeWitnessConstruction.native_construct_accepted_witness` derives actual
+witness generation, canonical shape, exact reviewed signals and all 28,275
+R1CS checks from original input acceptance. The worker source wrapper in
+`NativeWorkerReference.native_original_worker_reference_bound` extracts that
+acceptance from the real pre-entropy prefix and uses the constructed witness
+in the complete terminal-observation theorem. It retains the explicit later
+key/H/context/setup hypotheses; it does not infer them from asset hashes.
 
 `Protocol/ClassicVerifyingKey.lean` compiles the complete Classic key into Lean and exposes a checked wrapper without a caller-key argument. Two theorems show that a successful result used the checked key and canonical public signals. Offline tests compare every coordinate against a vendored immutable Solidity source through the pinned fixture. This does not prove deployed pool/verifier binding or pairing correctness; see [compiled key scope](CLASSIC_KEY_SCOPE.md).
 
@@ -132,8 +143,11 @@ compiled-key verification. `prove_success_from_original` and
 from the original pinned assets, withdrawal input and supplied `r,s`, through
 input-prefix construction, the actual witness generator, full key decoding,
 `calculateH`, point assembly and the exact serialized returned bytes. This is
-execution provenance from original inputs, not a proof that valid inputs
-universally construct a proof or that H/points satisfy Groth16 algebra. One unfunded public fixture matches the pinned SDK's exact 256 proof bytes. This does not prove Groth16 arithmetic or soundness for every input, secret-safe computation, or a deployed pool's verifier identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
+execution provenance. The separate construction results above establish H,
+assembly and conditional native verifier correctness. One unfunded public
+fixture matches the pinned SDK's exact 256 proof bytes. Setup honesty,
+cryptographic soundness, secret-safe physical computation and deployed pool
+identity remain separate; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
 
 `Runtime/ProofBlinding.lean` samples nonzero canonical Fr values using the
 shared bounded rejection loop. The canonical probability modules count all
@@ -150,20 +164,25 @@ masks, every common deterministic observation event has probability difference
 at most `4q/(q−1)²`, also for the bounded sampler with its common failure outcome.
 `SamplerField` transfers that bound to the field-cast observation of the shared
 pure byte sampler. The entropy contract remains IID uniform source bytes.
-The complete native worker, all additional failures, complete proof-assembly/QAP/G2/pairing computation
-and release observations are not yet proved to factor through that ideal
-triple. OS-source coupling, timing, resources, erasure and history/RPC privacy
-remain outside the result; see [sampler scope](PROOF_BLINDING_SCOPE.md).
+The application workspace now proves that the original native assembly,
+normalization, serialization, compiled-key acceptance, request validation and
+terminal observation factor through that triple under its explicit source
+and honest-setup hypotheses. `WorkerPrefix.original_worker_output_privacy`
+connects the original proofProgram after independent input admission and
+proves every stdout/stderr/exit-status event differs by at most `2^-251` for
+the same public setup and signals. Rejection, retry exhaustion and later
+proof failures are retained rather than conditioned away. The theorem does
+not cover arbitrary malformed note parsing, signing/metadata content, physical
+partial writes, time, memory, process failures or a malicious setup. See
+[sampler scope](PROOF_BLINDING_SCOPE.md).
 
-`Runtime/WorkerProgram.lean` is the restricted effect language interpreted by
-the actual worker entry point. `Spec/WorkerDisclosure.lean` proves mode-specific
-read/entropy confinement, protection-first trace structure and the canonical
-typed output or constant-failure envelope, including request binding at
-release. No unrestricted IO prover callback is hidden in the program. The
-interpreter, OS and cryptographic output contents remain trust boundaries.
-No theorem factors the complete worker's success, additional failure or release
-observation through the ideal scalar triple. These are capability and format
-claims, not absence of covert channels or implementation zero knowledge. See [worker scope](PROVER_WORKER_SCOPE.md).
+`Runtime/WorkerProgram.lean` is the actual restricted effect language.
+`Spec/WorkerDisclosure.lean` proves mode-specific read/entropy confinement,
+protection-first traces, typed request-bound output or fixed failure. Its four
+asset slots are admitted before reading the note. These capability properties
+and the conditional proof-output theorem have different scopes; neither
+certifies the physical interpreter or installed executable. See
+[worker scope](PROVER_WORKER_SCOPE.md).
 
 `Protocol/DirectWithdrawalIntent.lean` is an executable gate in the direct
 sponsored builder. Five theorems bind its decoded pool/recipient/fee and other

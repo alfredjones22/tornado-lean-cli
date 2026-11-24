@@ -1,6 +1,6 @@
 # CLI parity and safety register
 
-Target: clean `tornado-cli-new-era` main commit `daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7`, `@kohaku-eth/tornado-cash@0.1.0-alpha.38`, and pinned TypeScript build SHA-256 `cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809`. This register describes implementation coverage. It is not a correctness certificate.
+Target: clean `tornado-cli-new-era` main commit `a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326`, `@kohaku-eth/tornado-cash@0.1.0-alpha.40`, and pinned TypeScript build SHA-256 `cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809`. The unchanged externalized bundle is supplemented by lockfile and eight installed oracle package tree hashes in `fixtures/typescript-oracle-identity.json`. This register describes implementation coverage. It is not a correctness certificate.
 
 ## Seventeen TypeScript leaf commands
 
@@ -59,24 +59,21 @@ actual public success theorem reaches the prepared review used by the driver.
 The byte-entropy bridge proves that the runtime uint256 decoder is bijective.
 `SamplerField` additionally transfers arbitrary events of the shared sequential
 sampler through canonical scalar-to-field conversion, retaining retry failure.
-The resulting bound concerns observations of a compatible ideal field triple,
-not yet the complete worker's released bytes and additional failures.
+The [application workspace](../app-proofs/README.md) connects that sampler
+to actual native proof assembly, normalization, encoding, acceptance, wire
+validation and terminal output, retaining every later failure. Its explicit
+witness-free reference bound is at most `2^-251` under original source,
+honest-setup and IID-byte conditions. The reference uses abstract setup
+trapdoors, not a second real witness or a public trapdoor-recovery algorithm.
 
-The [mathematical workspace](../proofs/README.md) certifies the actual field
-primes and native field/inverse operations, exact-order admitted roots, the
-indexed butterfly and two-point DFT/IFFT, and G1 addition/doubling/normalization
-mapped to Mathlib's elliptic-curve group. The actual Solidity proof-byte codec
-has fixed-width construction and eight-limb recovery results, with G2 affine
-normalization still explicit. Successful actual windowed G1 MSM calls now bind
-the original ordered point decoding and original canonical scalars to the exact
-mathematical weighted sum and construct normalization of that result. A successful Classic pipeline result also has
-exact provenance from its original assets, withdrawal input and supplied
-blinding through witness/H/point construction and returned bytes. This is
-execution provenance, not universal valid-input success or Groth16 algebraic
-completeness. Remaining witness-gadget correspondence, general FFT/H/QAP,
-group/subgroup order, G2 MSM/group,
-pairing, OS-source coupling and full worker-observation
-factorization remain open.
+The [mathematical workspace](../proofs/README.md) certifies field and subgroup
+primes, native field towers, complete transforms/H/QAP, both curve groups and
+MSMs, complete assembly, exact eight-limb encoding, native Tate bilinearity
+and a closed nontrivial-generator certificate. Native verifier completeness
+and scalar equivalence retain their honest setup/key spans and finite-point
+conditions. Public witness certificates and independent point schedules bind
+source execution to every pinned row; the source predicates and external
+boundaries remain explicit.
 
 The [local EVM suite](LOCAL_EVM_SCOPE.md) checks actual Classic verifier,
 SimpleAccount/factory and paymaster code with native calldata and three public
@@ -104,9 +101,10 @@ The HTTPS RPC, Saga proxy, bundler, relayer, C/POSIX and libsecp256k1 boundaries
 The history RPC is also a privacy trust boundary: selected deposit receipt
 and selected nullifier-spent queries can reveal deposit–withdrawal linkage to
 an operator who can associate the requests. Worker capability confinement
-does not hide this parent-side association or prove that allowed proof bytes
-contain no covert information. Full Groth16 completeness and implementation
-zero knowledge remain unproved.
+does not hide this parent-side association. The conditional statistical
+proof-output theorem excludes timing, memory, malformed-note admission,
+other worker modes and physical IO. It is not full physical-process zero
+knowledge or a deployed-contract correctness theorem.
 
 The fund-safety specification requires exact reviewed intent before signing,
 reservation before executable exposure, no duplicate/replacement under

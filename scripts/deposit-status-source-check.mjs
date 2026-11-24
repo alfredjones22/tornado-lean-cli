@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import { assertOracleIdentity, oracleCommit } from './oracle-identity.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const source = resolve(root, '../tornado-cli-new-era')
@@ -15,7 +16,8 @@ if (!process.env.TORNADO_DEPOSIT_FIXTURE_TSX) {
     { stdio: 'inherit', env: { ...process.env, TORNADO_DEPOSIT_FIXTURE_TSX: '1' } })
   process.exit(result.status ?? 1)
 }
-const expectedCommit = 'daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7'
+const expectedCommit = oracleCommit
+assertOracleIdentity(source)
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).trim()
 if (head !== expectedCommit) throw new Error('TypeScript CLI source revision changed')
 const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'],

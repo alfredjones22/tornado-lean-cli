@@ -136,6 +136,9 @@ lean_exe relayer_submit_test where
 lean_exe worker_disclosure_test where
   root := `tests.WorkerDisclosure
 
+lean_exe witness_certificate_test where
+  root := `tests.WitnessCertificate
+
 -- The fault object is linked only into this process regression executable.
 -- Its translation unit includes the real protected-I/O implementation, with
 -- test-only syscall cuts; it must never become a package extern_lib.

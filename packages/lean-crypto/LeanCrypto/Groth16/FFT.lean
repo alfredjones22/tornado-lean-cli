@@ -151,11 +151,19 @@ def convolve (left right : Array Nat) : Except String (Array Nat) := do
   if a.size != b.size then throw "FFT convolution lengths differ."
   ifft ((a.zip b).map fun (x, y) => mul x y)
 
-private def trimZeros (values : Array Nat) : Array Nat := Id.run do
-  let mut result := values
-  while !result.isEmpty && result[result.size - 1]! == 0 do
-    result := result.pop
-  return result
+/-- Total pop recursion, retaining the former while-loop's trailing-zero rule. -/
+private def trimZeros (values : Array Nat) : Array Nat :=
+  if values.isEmpty then values
+  else if values[values.size - 1]! == 0 then trimZeros values.pop
+  else values
+termination_by values.size
+decreasing_by
+  have nonempty : 0 < values.size := by
+    rename_i notEmpty _
+    simp only [Array.isEmpty, decide_eq_true_eq] at notEmpty
+    omega
+  simp only [Array.size_pop]
+  omega
 
 /-- Sum the authenticated key's signal-indexed sparse A or B polynomials
     into the domain evaluation vector. A caller can pass any parsed value, so

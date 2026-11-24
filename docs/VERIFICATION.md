@@ -12,7 +12,7 @@ node scripts/verify.mjs --kernel-only
 
 This checks the toolchain, source/test inventory, pinned proving assets,
 declared native boundary, absence of proof escapes, all runtime/pure-library
-and mathematical-workspace builds, pinned Mathlib dependencies, and every
+and both proof-workspace builds, pinned Mathlib dependencies/local paths, and every
 theorem's axiom report. It writes `reports/verify-kernel.json` with
 `PROOFS_CHECKED_ONLY` when those checks pass.
 
@@ -21,8 +21,9 @@ integration or complete public proof fixtures. It does not replace or update
 `reports/verify.json`. The successful status deliberately differs from the
 full regression verdict.
 
-The proof-only workspace has its own pinned Mathlib dependency and transitive
-manifest. It is not imported by the executable. See its [setup and targeted
+The mathematical and application proof workspaces share the same pinned
+Mathlib dependency and transitive revisions. Neither is imported by the
+executable. See its [setup and targeted
 cache instructions](../proofs/README.md); the G1 group bridge uses
 `Mathlib/AlgebraicGeometry/EllipticCurve/Jacobian/Point.lean`.
 
@@ -62,8 +63,10 @@ The full gate builds executable/test targets, checks native boundaries and
 independent fixture oracles, inspects every theorem, runs focused and full-size
 public proof fixtures, runs mathematical and local EVM regressions, checks
 synthetic provenance/integrity failures, and compares the supported CLI surface
-with the pinned TypeScript oracle. Mathematical checks include the actual G1
-windowed MSM's original-input weighted-sum theorem. It writes `reports/verify.json`
+with the pinned TypeScript oracle. Mathematical checks include complete native transforms, both group/MSM
+constructions, assembly, pairing and source-level worker-output results.
+The public witness certificate is regenerated and checked against every R1CS
+row; the independent point schedule and structural mutations are also tested. It writes `reports/verify.json`
 with `PASS_WITH_LIMITATIONS` only after every required check passes.
 
 The source checkout for the TypeScript oracle, pinned local Solidity checkout,

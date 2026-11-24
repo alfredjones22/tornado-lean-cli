@@ -20,13 +20,14 @@ inductive Mode where
   deriving BEq, DecidableEq, Inhabited
 
 inductive Asset where
-  | circuit | key | graph
+  | circuit | key | graph | witnessCertificate
   deriving BEq, DecidableEq, Inhabited
 
 def Asset.suffix : Asset → String
   | .circuit => "/assets/proving/tornado-3ddd61dbff09caee.json.gz"
   | .key => "/assets/proving/tornadoProvingKey-8e2d2f22beafb5a9.bin.gz"
   | .graph => "/fixtures/witness-vm-selected-components.json"
+  | .witnessCertificate => "/assets/proving/tornado-witness-certificate-v1.json.gz"
 
 inductive File where
   | note | request | asset (kind : Asset)
@@ -212,7 +213,7 @@ private def absolute (path : String) : IO String := do
   return ((← IO.currentDir) / path).toString
 
 /-- This is the small trusted IO interpretation. It opens the selected
-protected note, selected bounded request, three fixed asset suffixes, and
+protected note, selected bounded request, four fixed asset suffixes, and
 kernel entropy. It contains no network, file-write, stdout or stderr call. -/
 def nativeBackend (scope : Scope) : Backend := {
   protect := NativeSigner.disableWorkerCoreDumps
@@ -228,7 +229,8 @@ def nativeBackend (scope : Scope) : Backend := {
     boundedRead (← absolute path) (match kind with
       | .circuit => 4 * 1024 * 1024
       | .key => 32 * 1024 * 1024
-      | .graph => 16 * 1024 * 1024)
+      | .graph => 16 * 1024 * 1024
+      | .witnessCertificate => 2 * 1024 * 1024)
   entropy32 := Entropy.readKernelRandom 32 }
 
 def failureLine : String := "Prover worker failed.\n"

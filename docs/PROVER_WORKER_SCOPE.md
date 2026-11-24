@@ -26,12 +26,13 @@ cryptography, without a constant-time or complete-erasure guarantee.
 
 The actual dispatcher constructs
 [`WorkerProgram.Program`](../Tornado/Runtime/WorkerProgram.lean), whose effects
-are configured note/request reads, three fixed asset slots and explicit
+are configured note/request reads, four fixed asset slots and explicit
 32-byte entropy draws. Request reads require sign/prove mode; asset and
 entropy access require prove mode. The native interpreter attempts core-dump
 suppression before input access and stops if it fails. Public request reads
 are capped at 4,096 bytes; compressed circuit/key and witness-graph slots are
-capped at 4/32/16 MiB respectively. The private note uses the protected reader.
+capped at 4/32/16 MiB respectively; the public witness certificate has a
+2 MiB compressed cap and a 16 MiB decompressed cap. The private note uses the protected reader.
 There is no network, file-write, arbitrary-path or logging operation in the
 program, and no unrestricted prover IO callback.
 
@@ -42,11 +43,18 @@ release rechecks request binding. Injected read/entropy/protection failures
 and actual oversized input paths have focused tests; the real-child public
 fixture exercises the refactored prover.
 
-These statements concern enumerated capabilities and requested output. They
-do not prove absence of secrets covertly encoded into permitted proof,
-signature or metadata fields. Secret-dependent success/failure, timing,
-resource use, partial OS output, crashes and memory remnants are outside the
-claim. The interpreter and installed executable remain trusted. The configured
+The capability statements alone do not rule out secrets encoded in an
+allowed cryptographic output. The separate
+[`original_worker_output_privacy`](../app-proofs/TornadoProofs/WorkerPrefix.lean)
+now proves a conditional statistical statement about the exact proof
+program's stdout, stderr and exit status. Under its explicit source and
+honest-setup hypotheses, independently admitted notes with the same public
+setup and signals differ on every output event by at most `2^-251`, including
+all later proof failures and sampler exhaustion. This does not cover arbitrary
+note-parser failures, signing/metadata contents, physical partial output,
+timing, resources, crashes or memory remnants.
+
+The interpreter and installed executable remain trusted. The configured
 history RPC can associate selected deposit receipt and nullifier-spent queries;
 this worker boundary does not hide that parent-side linkage.
 

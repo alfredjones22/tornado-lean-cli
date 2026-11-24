@@ -59,14 +59,45 @@ stored boolean/reconstruction/mux equations and assignment preservation, with
 no final-R1CS-success premise. The extracted selector refactor is proved equal
 to the entire original Merkle-level implementation, including errors.
 
-This does not prove every other instantiated template, all original constraint
-rows or global witness construction for every valid input. Other graph/primitive
-correspondence remains tested rather than fully proved. The separate BN254
-G1/MSM results do not prove the BabyJub/Pedersen or MiMC witness gadgets. See
-[proof scope](PROOF_SCOPE.md) and the [mathematical workspace](../proofs/README.md).
-The pinned circuit itself, proving key, deployed verifier, and consensus chain
-are external trust boundaries. A satisfying witness does **not** produce a
-Groth16 proof, establish that a note is unspent, or validate the pool root.
+The application proof workspace now covers all primitive kinds, Num2Bits,
+public seeds, complete MiMC phases, every local row and original ordered
+witness materialization. `CanonicalSource.generateCheckedWitness_source`
+constructs the actual generation return from independently interpreted original
+inputs and explicit arithmetic source conditions; it does not assume that
+execution or the final R1CS checker succeeded.
+
+Those arithmetic source conditions are now derived from the independent
+`Source.ValidWithdrawal` predicate and the checked public bases in
+`ReferenceProgramMeaning.referenceMeaning_construct`. The proof follows the
+actual original note bits through all five signed-window segments and
+complete Edwards additions, including the exact 31-byte concatenation and
+25-byte chunk boundaries. It constructs the point-operation domains and
+identifies the actual commitment and nullifier coordinates with native
+Pedersen hashing. `InputInverse.prepareInputPrefix_iff_source` proves the
+original input validator accepts exactly this source domain; it is not an
+assumed replacement validator.
+
+`NativeWitnessConstruction.native_construct_accepted_witness` composes that
+source meaning with the actual public certificate and witness execution.
+For every original accepted prefix, it constructs a canonical 28,300-slot
+witness, its exact six reviewed public signals and all 28,275 checked R1CS
+equations. None of those final checks is a premise of the theorem.
+
+The public asset gate regenerates local equations, verifies their full linear
+elimination against the actual pinned constraints, checks native generator
+subgroup receipts and circuit-base binding, and validates an independent
+signed-window point schedule. The BabyJubJub proofs connect actual native
+addition, scalar multiplication and normalization to Mathlib's group, with
+signed-window bounds and denominator conditions stated separately. The source
+construction and reference program identify which original-input properties
+are required; see [application proofs](../app-proofs/README.md).
+
+These are statements about the pinned typed program and R1CS, not a general
+Circom/JavaScript compiler equivalence theorem or a proof that the circuit
+expresses every user expectation. Setup honesty, deployed code and consensus
+state remain external. R1CS satisfaction does not establish unspentness or a
+pool's acceptance of the supplied root. Full proof assembly and conditional
+native verification have their own results in [proof scope](PROOF_SCOPE.md).
 
 The field and point operations are variable-time and do not zeroize
 note secrets. Connected experimental withdrawals have no production
