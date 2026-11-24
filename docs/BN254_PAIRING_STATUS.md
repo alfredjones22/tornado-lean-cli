@@ -14,8 +14,11 @@ sign, submit, authenticate chain state or prove deployed verifier identity.
   E(Fp12) lines, a full vertical denominator, an Fr Miller loop, a final
   exponent, on-curve checks, and an explicit G2 subgroup check. Lean proves
   successful results are nonzero and have Fr order. It is slow but native Lean.
-- `BN254Groth16Verify.lean`: the Classic four-pair Groth16 verification
-  equation with six bounded public signals and seven checked IC points.
+- `BN254Groth16Verify.lean` re-exports the generic `LeanCrypto.Groth16.Verify`
+  four-pair equation. Its dimension-driven interface accepts 0–1,024 bounded
+  public signals and requires exactly one more IC point. The separate
+  `ClassicVerifyingKey.verifyClassic` wrapper retains exactly six signals
+  and seven checked IC points.
   It returns `false` for a failed equation and errors for malformed inputs.
   Lean proves that every successful public-input commitment, and every direct
   `verify = .ok true` result, had signals below the scalar-field modulus.
@@ -39,6 +42,10 @@ sign, submit, authenticate chain state or prove deployed verifier identity.
   at **each** of the six public-signal positions. All six native `vkX`
   coordinates also match noble. Native tests reject malformed/off-curve public
   points, a non-subgroup G2 point, bad IC length, and noncanonical signals.
+- A separate public square-circuit fixture has one public signal, its own
+  key and proof, and independent polynomial/point/proof-byte oracles. It
+  exercises the generic verifier and rejects a changed signal; see the
+  [standalone package](../packages/lean-crypto/README.md).
 
 ## Boundaries
 

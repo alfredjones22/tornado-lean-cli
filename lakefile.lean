@@ -1,6 +1,8 @@
 import Lake
 open Lake DSL
 
+require leanCrypto from "packages/lean-crypto"
+
 package tornadoLeanCli where
   version := v!"0.1.0"
   -- Lean's bundled linker uses its own sysroot; macOS SDK stubs must be
@@ -133,3 +135,19 @@ lean_exe relayer_submit_test where
 
 lean_exe worker_disclosure_test where
   root := `tests.WorkerDisclosure
+
+-- The fault object is linked only into this process regression executable.
+-- Its translation unit includes the real protected-I/O implementation, with
+-- test-only syscall cuts; it must never become a package extern_lib.
+target reservationFaultIO pkg : System.FilePath := do
+  let source ← inputFile (pkg.dir / "tests" / "native" / "reservation_fault_io.c") false
+  let lean ← getLeanInstall
+  buildO (pkg.buildDir / "native" / "reservation_fault_io.o") source
+    #[] #["-I", lean.includeDir.toString, "-std=c11", "-Wall", "-Wextra", "-Werror"]
+    (compiler := "/usr/bin/cc")
+    (extraDepTrace := computeTrace #[pkg.dir / "native" / "tornado_private_io.c",
+      pkg.dir / "native" / "tornado_private_io.h"])
+
+lean_exe reservation_admission_process_test where
+  root := `tests.ReservationAdmissionProcess
+  moreLinkObjs := #[{ key := .packageTarget .anonymous `reservationFaultIO }]

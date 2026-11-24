@@ -102,11 +102,23 @@ const witness = JSON.parse(witnessFixture.toString('utf8')).witness.map(BigInt)
 if (witness.length !== nVars || witness[0] !== 1n)
   throw new Error('Unexpected public witness')
 const relayerProfile = ['--relayer-write', '--relayer-check'].includes(process.argv[2])
+const accountProfile = ['--account-write', '--account-check'].includes(process.argv[2])
 if (relayerProfile) {
   // Public, unfunded fixture only. The circuit binds these two public
   // inputs through their dummy square constraints in the final witness slots.
   witness[4] = 187n
   witness[5] = 860000000000000n
+  witness[28298] = Fr.sqr(witness[4])
+  witness[28297] = Fr.sqr(witness[5])
+}
+if (accountProfile) {
+  // Public, unfunded account fixture for local EVM interoperability. The
+  // account address avoids the Ethereum precompile range. No secret input
+  // or randomness is selected from a user backup.
+  witness[3] = 0x1000000000000000000000000000000000000001n
+  witness[4] = 0xb0ffcdc890e969579d348f519a9c3920c2dd04a5n
+  witness[5] = 1n
+  witness[28296] = Fr.sqr(witness[3])
   witness[28298] = Fr.sqr(witness[4])
   witness[28297] = Fr.sqr(witness[5])
 }
@@ -138,22 +150,25 @@ const output = JSON.stringify({
   provingKeySHA256: keySHA256,
   publicWitnessFixtureSHA256: witnessFixtureSHA256,
   ...(relayerProfile ? { profile: 'unfunded Classic relayer; reward=187; fee=860000000000000' } : {}),
+  ...(accountProfile ? { profile: 'unfunded local EVM smart account; pinned mainnet sponsor; fee=1' } : {}),
   blindingR: '1', blindingS: '2',
   publicSignals: proof.publicSignals.map(String),
   solidityProofHex: hex,
   solidityProofSHA256: sha256(Buffer.from(hex.slice(2), 'hex')),
 }, null, 2) + '\n'
-const fixturePath = resolve(lean, relayerProfile
+const fixturePath = resolve(lean, accountProfile ? 'fixtures/groth16-account-public-proof.json' : relayerProfile
   ? 'fixtures/groth16-relayer-public-proof.json' : 'fixtures/groth16-full-public-proof.json')
-if (process.argv[2] === '--write' || process.argv[2] === '--relayer-write') {
+if (process.argv[2] === '--write' || process.argv[2] === '--relayer-write' || process.argv[2] === '--account-write') {
   writeFileSync(fixturePath, output)
   console.log(`Wrote pinned public full proof vector (oracle key parse ${keyParseMs} ms)`)
-} else if (process.argv[2] === '--check' || process.argv[2] === '--relayer-check') {
+} else if (process.argv[2] === '--check' || process.argv[2] === '--relayer-check' || process.argv[2] === '--account-check') {
   if (readFileSync(fixturePath, 'utf8') !== output)
     throw new Error('Full public proof differs from the pinned JS oracle')
-  console.log(relayerProfile
+  console.log(accountProfile
+    ? 'PASS: public smart-account sponsor proof bytes match pinned micro-zk-proofs and all R1CS constraints'
+    : relayerProfile
     ? 'PASS: public Classic relayer proof bytes match pinned micro-zk-proofs and all R1CS constraints'
     : 'PASS: full public Groth16 proof bytes match pinned micro-zk-proofs')
 } else {
-  throw new Error('Use --write, --check, --relayer-write or --relayer-check')
+  throw new Error('Use --write, --check, --relayer-write, --relayer-check, --account-write or --account-check')
 }

@@ -51,14 +51,45 @@ the runtime does not read or preallocate them.
 The conditional statements use cross-multiplied integer counts, with positive
 denominator theorems, rather than floating-point estimates. Their proof
 dependencies are inspected by `#print axioms` in the verification gate.
-They do **not** prove kernel entropy, byte-decoder distribution equivalence,
-independence of OS reads, or the behavior of a substituted entropy source.
-Those are the explicit decoded-candidate entropy contract.
+[`ByteEntropy`](../Tornado/Spec/ByteEntropy.lean) closes the byte-decoder
+distribution link. It enumerates actual `UInt8` coordinates, proves the
+32-byte runtime fold decoder is a bijection onto uint256, and proves an exact
+weighted change of variables for every draw-tree event. Early returns,
+sequential pair sampling and unused suffix coordinates are included. The
+uniformity and exhaustion results therefore transfer from independent
+uniform 32-byte inputs to the runtime sampler, without assuming fictional
+uniform output weights. The fixed-width codec and both inverse laws are in
+[`FixedBytes`](../Tornado/Encoding/FixedBytes.lean).
 
-Nor do they prove secrecy of Groth16 proof construction, absence of information
-encoded into proof bytes, or independence after conditioning on a later
-witness/prover/transport failure. They are distribution results for the
-sampler's success, not a zero-knowledge theorem for the complete CLI.
+The proofs do **not** establish kernel entropy, independence of OS reads or
+the behavior of a substituted entropy source. Uniform independent source
+bytes remain the explicit entropy contract. Malformed reads and IO failures
+stop the runtime and are outside the ideal-source numerical bounds.
+
+## Ideal proof-output event bound
+
+The separate [mathematical workspace](../proofs/README.md) fixes a common
+public setup with `δ ≠ 0` and ideal offsets satisfying `δK = AB − κ`.
+`Groth16IdealPrivacy` proves that a bijective translation of full-field masks
+preserves the entire ideal Groth16 triple. Every common deterministic
+observation therefore has exactly equal full-field event counts. The actual
+sampler restricts masks to nonzero values; for those masks the proved event
+probability difference is bounded by `4q/(q−1)²`, rather than claimed equal.
+
+`SamplerField` closes the canonical Nat-label-to-`ZMod` representation bridge.
+It proves arbitrary-event pushforward of the actual shared sequential sampler
+and its full-width byte decoder to the ideal field model. The bounded result
+retains the common retry-exhaustion outcome in the observation and denominator;
+it does not silently condition on success. A common deterministic observer may
+also reject or fail on the ideal triple.
+
+This is not yet a distribution theorem for the complete worker's released
+bytes. The remaining witness-gadget/QAP/proof-assembly/G2-MSM/pairing computation and
+all additional worker failures and releases have not been proved to factor
+through that ideal triple. The proved G1 group/scalar/windowed-MSM, normalization and fixed-limb codec
+results alone do not supply this factorization. OS/backend distribution
+coupling is also unproved. No implementation zero-knowledge, failure
+noninterference, constant-time or erasure claim follows.
 
 The connected experimental worker uses this sampler for fresh proof blinding.
 The current native prover still uses variable-time bigint and elliptic-curve arithmetic, and

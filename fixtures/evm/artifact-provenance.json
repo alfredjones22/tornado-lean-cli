@@ -1,0 +1,228 @@
+{
+  "schema": 1,
+  "scope": "Local actual Classic verifier and AA account/factory/paymaster; synthetic EntryPoint, token and pool. No full handleOps or real pool integration.",
+  "sourceRevisions": {
+    "privacyPaymaster": "1b23e91a06fb4af50220507febf38bd05078e6a4",
+    "accountAbstraction": "4cbc06072cdc19fd60f285c5997f4f7f57a588de",
+    "openzeppelin": "5fd1781b1454fd1ef8e722282f86f9293cacf256"
+  },
+  "contracts": {
+    "Verifier": {
+      "compiler": "0.7.6+commit.7338295f",
+      "evmVersion": "istanbul",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "8a8c6cdb20a798fd37d29834ef77beecbd641a45dd6fcd3fe1164c2af59cf9d9",
+      "unpatchedRuntimeSHA256": "769be7720f0402c8828516d0a3e29b7b67334acc413d9d8496132dafcc33ece5",
+      "license": "MIT"
+    },
+    "SimpleAccount": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "9c9699d02d41fb5a3b778e0e9e763eef46c3eb27faecb899134742cd97619a18",
+      "unpatchedRuntimeSHA256": "a9d46f611a46fd9109a4e2137138a0a2a643934072c9d7d74b391e102219793a",
+      "license": "MIT"
+    },
+    "SimpleAccountFactory": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "d54e823c001a1b0302e56bc781a2aa63d75d57201e80e78e2a82a0b3ef9bf01f",
+      "unpatchedRuntimeSHA256": "247a5963c557734c66a2146d94efb6d4bf4ef1911a54d3e852331ad286307891",
+      "license": "MIT"
+    },
+    "TornadoPaymaster": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "004e17277f1344c6942ce8ca5011ea9bd2bf0a9bb165ea52c10db9129b63c50f",
+      "unpatchedRuntimeSHA256": "277162f6679dfb4c13973a064530b1c77bdabd0f829b37158ffc9653d5c52901",
+      "license": "UNLICENSED; locally compiled only"
+    },
+    "ProbeEntryPoint": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "7ee2f9e960a137f7221dc3cb95768e259dfb681e873c1eac24afb0d49b89d2e8",
+      "unpatchedRuntimeSHA256": "dc35309a2536104bb01e190e0ddb995d944a96a14b0c5ff6e72d949485f2e7f9",
+      "license": "MIT; synthetic test boundary"
+    },
+    "ProbeToken": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "1020af0364c5886203d7d7a3c864369caf81839c32571eef283d0b6834a9be1a",
+      "unpatchedRuntimeSHA256": "a4fd5f9dcae6a3c371190e7300f1e8ba65af2202fa23fb4d4d5136e8c3c97c98",
+      "license": "MIT; synthetic token"
+    },
+    "ProbePool": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "8dbfec0630fad90724af37bc4de8a67a4e801986e8b9303cf93f2e6bc28271b9",
+      "unpatchedRuntimeSHA256": "8768878858825e55bca95a03abe161bc229b12146d228e001d8a2e91155b8053",
+      "license": "MIT; synthetic pool, no proof checks"
+    },
+    "ProbeRecorder": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "c41b655219bb1ac3d4a6e04b2e9f570eb32f3bd1bf3a57d4a561f1805623e865",
+      "unpatchedRuntimeSHA256": "6dc7fa4e9df50f21ff4c572c5c4dbe1e9fe08c93a2fafa039b0733f8dbcb64ce",
+      "license": "MIT; test observer"
+    },
+    "ProbeFailure": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "312e26c4e77b59a9e74c6fa4cc236effa9bd39368c5dc6514213d9953cc09dda",
+      "unpatchedRuntimeSHA256": "cee092b6928bf03c1055ab8cf7540c76d7f603deeb44547ab60578387aef1a0a",
+      "license": "MIT; intentional revert"
+    },
+    "ProbeEthPool": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "bb92f3772086b9dfdd1cd53df5488bb93b0ba4dc371f5cc244ff893b74d44bdf",
+      "unpatchedRuntimeSHA256": "bab66308e1f66a882b01013d97068cfbdfb57b168c6affb85ab39a8a6bb8495b",
+      "license": "MIT; synthetic single-root ETH ledger, actual Classic verifier"
+    },
+    "ProbeDepositToken": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "6eae2afa124b0944b2b573df238fa59dae6d320719cfbd659f10c4cbf34be719",
+      "unpatchedRuntimeSHA256": "e11315020e3b7be52bf8c0cc1b99c86628522a231f1ea02f65949589bf46b574",
+      "license": "MIT; synthetic allowance-reset test token"
+    },
+    "ProbeDepositPool": {
+      "compiler": "0.8.28+commit.7893614a",
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "bytecodeHash": "none",
+      "creationSHA256": "803a0b8ad702acdda7a0ccd5939ee8e76320306c8158c5950f28d878ca25fca4",
+      "unpatchedRuntimeSHA256": "6741917f6f4165df2ccc56cdf08a8795c58cc75e7ad4707b2356c46c161f0ca6",
+      "license": "MIT; synthetic deposit-only ledger"
+    }
+  },
+  "sourcesSHA256": {
+    "privacy-paymaster/contracts/BasePrivacyPaymaster.sol": "f79ef6536d5f148ce69430caa4d6fb0290d449c811a746fed284dcef4c497304",
+    "privacy-paymaster/contracts/tornadocash/interfaces/ITornadoInstance.sol": "0ba67e5cf93810d3df3b08506200bf3ba1498161414578cc3eb4d646e07adbcf",
+    "privacy-paymaster/contracts/tornadocash/TornadoPaymaster.sol": "95f32af902febe1c9655cf469b030747892f110a001dceafc9b930066ffd94d6",
+    "privacy-paymaster/lib/account-abstraction/contracts/accounts/callback/TokenCallbackHandler.sol": "9f9bca3f4998012350e1f896ce3256f87a05a2581a7cee8d9a2152b211a2efcc",
+    "privacy-paymaster/lib/account-abstraction/contracts/accounts/SimpleAccount.sol": "df4b2d422790ae358b10c1359d2f2c164ae8f60d0af8b568c6d5020d54ef0eba",
+    "privacy-paymaster/lib/account-abstraction/contracts/accounts/SimpleAccountFactory.sol": "a0ad6d668a18f44a54139d6d504284ee144f1ec37eb82470517b172d711aa97e",
+    "privacy-paymaster/lib/account-abstraction/contracts/core/BaseAccount.sol": "d1cdb2bc26b1acc1c6217cba0060f0608d51267526f736f6bbbd14e49d2c655f",
+    "privacy-paymaster/lib/account-abstraction/contracts/core/BasePaymaster.sol": "d6c7e75855c1f3a97254268f88342729f600b8c1d75d597d0fc27c971c2e9aab",
+    "privacy-paymaster/lib/account-abstraction/contracts/core/Helpers.sol": "c3da33a3d7916abc048af7c5a7ccafc5df7eb18c7b335315d2f4492a6133fc5c",
+    "privacy-paymaster/lib/account-abstraction/contracts/core/UserOperationLib.sol": "5eb7ed0461f6157d641ae38e60564067c49459415701edcd206115a12ea4289b",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/IAccount.sol": "2c1b8edec106515424e725970139d0bdb1f624377e3452c82095310642647ac8",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/IAggregator.sol": "f2986a91e9b3c694241af5803d6657c985af962620a0646e4fdaea95ddc4d35e",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/IEntryPoint.sol": "a3f1fa434462383b862082f062228eb1075dc90aab6ab2981522a58add4d5bba",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/INonceManager.sol": "46717d66cbde8176989a4a320f6d8a937fddae42abc772a8e22abe22c62f57b5",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/IPaymaster.sol": "afa15dcc078da38975c9c34320f4312ec5fe4cd02d3e88f40dcf0cdaab6a7856",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/ISenderCreator.sol": "a1448e8754f7a1e9f2fd97cba36a951b55c6ab422164250913904bd587c905a2",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/IStakeManager.sol": "b5b638a2d9f046c7f77b83a1bb2a1f5804527cac17ca9726febdbe3607c86a2a",
+    "privacy-paymaster/lib/account-abstraction/contracts/interfaces/PackedUserOperation.sol": "e1c1f25c071c981fa03901e86a85e7ac4300cdc5c54165a1b96962427d9a1930",
+    "privacy-paymaster/lib/account-abstraction/contracts/utils/Exec.sol": "fb027b5d2397bf767cc1caa5660c408ea900c1a8c48b8e2db1b19ae6e856972d",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/access/Ownable.sol": "38578bd71c0a909840e67202db527cc6b4e6b437e0f39f0c909da32c1e30cb81",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol": "c75345d7b9feef17ae29f2a800ca2f65f8021cf80436a41d6ec00f57f5180f36",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/interfaces/draft-IERC1822.sol": "73653312bc2eda0ec231553a5295242eaef2d4f46a023532d45fe76cbd0f565f",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/interfaces/IERC1967.sol": "c4e901318ab6d4963582c62c62ce988a34c68dbae71846b67decacde79e9a317",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/beacon/IBeacon.sol": "c1c9726bbb0ec4c540c7c98059dcded69a8586b46c168036672381033ee76239",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol": "41a3040398d53999dea3251ff8906e11ec1a699362a1d8f4a55bfc7709cc00f3",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Utils.sol": "a89ba2032ab25959c6fde1e508ebf8f966ff632703d3ef79684f578a8fa8033f",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/Proxy.sol": "fa8aae37b2939371fcbce48b814c0d5c7e57e3e267f348459f29941937746c98",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/utils/Initializable.sol": "f527a063813c2bf60c153fb08e38539578935402894fcc36fac42324ca325d3b",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol": "b5af3bfd79a32c6da2d09b0be38d9b63dcd0d159a1a4a0198431fd00acc1fd52",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/token/ERC1155/IERC1155Receiver.sol": "3df310870e0187a59020ea48e910ed2693778b1f758b57b97a47365d74b92af5",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol": "c2394cb2a327f234711da34884947f4aa0f6dd2791d1d6303a0c7acfaf81bca3",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol": "eafee3ffdc7cb2fba4bf6bd16fb28f8e5b4679742e81c2ad42a1b1df5c179feb",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Address.sol": "73e54e15285455f0e01e136c3663732641537614723ae5dbd820eb3cb036b1fd",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Bytes.sol": "3ce9120a27934c75a074cb785d3a88868069ef6529dbe4dc6b845af0836f3c70",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Context.sol": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Create2.sol": "9623aa59745a23a72f313adc5adbf583968bf366a7cbf3fc43c1148d7d2c3c86",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol": "ba7c2d314fcd61c9783e0b3f0c664d004b76b408fda6a84edc8267d17c5012d6",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol": "538a0d7c4f0ec5a8562f58561890f7b49d14580674ecf58bc5f505b45c73df65",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Errors.sol": "0704b9d6c032cca8512a3bc3f30f49f86f1f03102d2896a3d23e794b82efea66",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/LowLevelCall.sol": "e128cbe9c6c406d5a42c26e4079c0a95b369ce552f2d0c3dfd2fcb836c5708f2",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/math/Math.sol": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol": "1ed50b1056af886752f0fb48a0165d381e69bb4a4b18b893b066dc144a7e08d7",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Panic.sol": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/StorageSlot.sol": "75704538dcb223239280c6726d9a31cf769a7816718517c997fc7d63bdb70778",
+    "privacy-paymaster/lib/openzeppelin-contracts/contracts/utils/Strings.sol": "e318709bbe73a7831d64c1351e8bdc43780b245f25191234e361e6ab9b98c67b",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/IUniswapV3Factory.sol": "17c72e89a7d0eecca7929ca08d97f46e80930ef7024e4ccbc7b294c588477107",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/IUniswapV3Pool.sol": "7d5a50c132b4fcbc2550bc17f490ff10aa6b6b337bbde3a650831f79ff7fbf54",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolActions.sol": "7fc763acbf5e7044d88cae4a6ed7b1c99b5268d647ae794ba5ee1085060e6a2c",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolDerivedState.sol": "9f670bdfed3a283e0557b208a5d4bc561afd2df771d67c4368dddaae2dc1b6e3",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolErrors.sol": "0c4a1c4d04aa597bf81b022d54bb7030582be3be24cb6083e3b4eb7479e8e5c3",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolEvents.sol": "2c2b798ca4288dfdf746bca8516b4e725b79ca6636af3d38a5a64801e50020a7",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolImmutables.sol": "ac6332f7e174db7fa3852a6c5ae3da3bd013e72c2ff8fa1cf2ec37f6916e2951",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolOwnerActions.sol": "5f4cd982d6abe55237bc770da3b667f96edf048c230cfe3d7f6309c92cc0e205",
+    "privacy-paymaster/lib/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol": "42ac0868d361677de6015ca8935aa608ef58198f7af208aefcbc75cc75480c5d",
+    "privacy-paymaster/lib/v3-core/contracts/libraries/FullMath.sol": "41fcfedac62eb4cf54da3da767a82272fc7f285bcb03efdb5c428a8b05e4bf05",
+    "privacy-paymaster/lib/v3-core/contracts/libraries/TickMath.sol": "007a6e5778bc21c18c1ea9379ce1390810d879e213f1dcecc77247eb7cccdc15",
+    "privacy-paymaster/lib/v3-periphery/contracts/libraries/OracleLibrary.sol": "ea34317e00face97a24dfa0fe104fc5f0b78003818687d16e85a77da0b4ae326",
+    "repo/fixtures/tornado-classic-Verifier.sol": "a2fd9a12dc008ae95e1f9da2968e7d017617e804f22aa0491d2e8a91d965a824",
+    "repo/tests/evm/DepositHarness.sol": "63b065103419452cbb90b26abcc4692c848f57c908c39c7df4e78dbca2c635bc",
+    "repo/tests/evm/IntegrationHarness.sol": "5908224617a01b6ec8008d86856a7e08b705ec4470adf27a1ea7975a49208534"
+  },
+  "fixturesSHA256": {
+    "fixtures/simple7702-code.json": "8588aee3beee431b7612fe365729c5619062b6dd59774e7deca13e92a75c97b8",
+    "fixtures/seeded-backup-format.txt": "6fefc233c2398af95f6ac52d0d2883a93c826860cfd263eff8c4c1304d36f23f",
+    "fixtures/seeded-note-vectors.json": "815bd5608744846f0723cf35872ae28badc16a9971f3828dfc681f30526f1135"
+  }
+}

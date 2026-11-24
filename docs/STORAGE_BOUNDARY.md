@@ -23,6 +23,15 @@ exposure marking precede those calls. Fault tests exercise write/CAS errors,
 concurrent claims and unknown outcomes; they do not prove whole-workflow crash
 safety or actual hardware durability.
 
+The runtime-used withdrawal journal and batch repair now share a finite
+create/CAS interpreter with exact-command acknowledgement certificates and
+conditional crash-prefix/readmission theorems. Native admission treats only
+ENOENT as absence and blocks partial or unreadable claims. The physical model
+explicitly includes interrupted creates and lost replies; its storage contract
+remains an assumption about this C/OS boundary. Five test-only native process
+cuts exercise the actual C implementation without adding a production fault
+mode. See [reservation and restart scope](RESERVATION_RECOVERY_SCOPE.md).
+
 The native C source, Lake linker configuration, and tests are hashed into the
 verifier's input inventory. The verifier checks an exact explicit FFI allowlist
 for protected storage, HTTPS, entropy, process and native signing boundaries;

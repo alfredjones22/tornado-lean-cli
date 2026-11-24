@@ -1,3 +1,4 @@
+import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.RelayerWithdrawalStatus
 import Tornado.Protocol.SponsoredWithdrawal
 import Tornado.Policy
@@ -706,7 +707,7 @@ def protectedJournal (path : String) : IO Journal := do
       if !name.startsWith namePrefix || !name.endsWith ".json" ||
           name.length != namePrefix.length + 69 ||
           !digest.all (fun c => ('0' <= c && c <= '9') || ('a' <= c && c <= 'f')) then fail
-      ProtectedIO.createPrivate path raw.toUTF8
+      WithdrawalJournalProgram.createProtected path raw.toUTF8
       saved.set (some raw.toUTF8),
     update := fun raw => do
       let some old ← saved.get | fail
@@ -721,7 +722,7 @@ def protectedJournal (path : String) : IO Journal := do
           | .error _ => next := next.setObjVal! name value
           | .ok current => if current != value then fail
       let updated := (next.compress ++ "\n").toUTF8
-      ProtectedIO.replacePrivate path old updated
+      WithdrawalJournalProgram.replaceProtected path old updated
       saved.set (some updated) }
 
 end Tornado.Cli.RelayerSend

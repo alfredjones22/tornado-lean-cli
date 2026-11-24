@@ -3,6 +3,7 @@ import Tornado.Runtime.Bundler
 import Tornado.Protocol.SelectedPoolBootstrap
 import Tornado.SmartAccount.Recovery
 import Tornado.Protocol.DirectWithdrawalIntent
+import Tornado.Protocol.BatchWithdrawalIntent
 
 /-! Public-only preparation for the pinned Tornado paymaster. Every proof is
 checked against its reviewed inputs before it can enter a UserOperation. This
@@ -96,7 +97,7 @@ structure Account where
 /-- Sponsor note pays the gas fee; every remaining note is withdrawn to the
 recoverable account with zero relayer/fee. Tail calls retain exact order.
 Without tail calls, the total net amount is forwarded to the receiver. -/
-def batch (notes : Array NoteProof) (account : Account) (receiver : Nat)
+private def batchCandidate (notes : Array NoteProof) (account : Account) (receiver : Nat)
     (tail : Array Abi.ContractCall) (gas : Gas)
     (bounds : Bundler.Bounds := {}) : Except String UserOperation := do
   if notes.isEmpty || notes.size > 12 || (notes.size == 1 && tail.isEmpty) ||
@@ -153,4 +154,85 @@ def batch (notes : Array NoteProof) (account : Account) (receiver : Nat)
   Bundler.validate op bounds
   return op
 
+/-- Original semantic input. Catalog lookup supplies denomination and token
+identity; proof/request values are retained directly, without calling an ABI
+encoder or examining the candidate operation. -/
+def batchIntent (notes : Array NoteProof) (account : Account) (receiver : Nat)
+    (tail : Array Abi.ContractCall) (gas : Gas) : Except String BatchWithdrawalIntent.Intent := do
+  let some first := notes[0]? | throw "Invalid batch withdrawal scope."
+  let pool ← selectedPool first
+  let sponsor ← paymaster first.request.chainId
+  let token : Option Nat ← match pool.asset.token with
+    | none => pure none
+    | some token => do
+      let bytes ← parseHexBytes token
+      pure (some (bytes.data.foldl (fun n b => n * 256 + b.toNat) 0))
+  let selected ← notes.mapM fun note => do
+    let pool ← selectedPool note
+    let withdrawal : BatchWithdrawalIntent.Withdrawal := {
+      pool := note.request.pool, proof := note.result.proof.data,
+      root := note.request.root, nullifierHash := note.request.nullifierHash,
+      recipient := note.request.recipient, relayer := note.request.relayer,
+      fee := note.request.fee, refund := note.request.refund }
+    return ({ withdrawal, denomination := pool.amount } : BatchWithdrawalIntent.Note)
+  return {
+    notes := selected, account := account.address, owner := account.owner,
+    nonce := account.nonce, deployed := account.deployed, receiver, sponsor, token, tail,
+    verificationGas := gas.verification, executionGas := gas.execution,
+    preVerificationGas := gas.preVerification,
+    paymasterVerificationGas := gas.paymasterVerification, postOpGas := gas.postOp,
+    maxFee := gas.maxFee, priorityFee := gas.priority }
+
+/-- Only preparation can create this certificate. Its index retains the exact
+original notes/account/receiver/calls/gas/bounds used by the public builder. -/
+structure PreparedBatch (notes : Array NoteProof) (account : Account) (receiver : Nat)
+    (tail : Array Abi.ContractCall) (gas : Gas) (bounds : Bundler.Bounds) where
+  private mk ::
+  operation : UserOperation
+  intent : BatchWithdrawalIntent.Intent
+  inputIntent : batchIntent notes account receiver tail gas = .ok intent
+  checked : BatchWithdrawalIntent.Checked intent operation bounds
+
+/-- Existing proof verification and candidate construction run first. The
+returned certificate then binds independently decoded bytes to original input. -/
+def prepareBatch (notes : Array NoteProof) (account : Account) (receiver : Nat)
+    (tail : Array Abi.ContractCall) (gas : Gas) (bounds : Bundler.Bounds := {}) :
+    Except String (PreparedBatch notes account receiver tail gas bounds) :=
+  match batchCandidate notes account receiver tail gas bounds with
+  | .error error => .error error
+  | .ok operation =>
+    match original : batchIntent notes account receiver tail gas with
+    | .error error => .error error
+    | .ok intent =>
+      match BatchWithdrawalIntent.accept intent operation bounds with
+      | .error error => .error error
+      | .ok checked => .ok ⟨operation, intent, original, checked⟩
+
+/-- Sponsor pays exactly the first note's fee, the remaining withdrawals keep
+order and zero fee/refund, and the only suffix is the exact reviewed calls or
+net forwarding. Success is guarded by a certificate tied to original input. -/
+def batch (notes : Array NoteProof) (account : Account) (receiver : Nat)
+    (tail : Array Abi.ContractCall) (gas : Gas)
+    (bounds : Bundler.Bounds := {}) : Except String UserOperation :=
+  (prepareBatch notes account receiver tail gas bounds).map (·.operation)
+
+/-- This theorem applies to the actual public builder result, including the
+semantic input derived from original note requests and catalog denominations. -/
+theorem batch_success_decodes (notes : Array NoteProof) (account : Account) (receiver : Nat)
+    (tail : Array Abi.ContractCall) (gas : Gas) (bounds : Bundler.Bounds) (op : UserOperation)
+    (built : batch notes account receiver tail gas bounds = .ok op) :
+    ∃ intent output,
+      batchIntent notes account receiver tail gas = .ok intent ∧
+      BatchWithdrawalIntent.decode intent op = .ok output ∧
+      BatchWithdrawalIntent.Matches intent op output bounds := by
+  cases prepared : prepareBatch notes account receiver tail gas bounds with
+  | error error => simp [batch, prepared, Except.map] at built
+  | ok result =>
+    have equal : result.operation = op := by simpa [batch, prepared, Except.map] using built
+    subst op
+    exact ⟨result.intent, result.checked.output, result.inputIntent,
+      result.checked.decoded, result.checked.agreement⟩
+
 end Tornado.Protocol.SponsoredWithdrawal
+
+#print axioms Tornado.Protocol.SponsoredWithdrawal.batch_success_decodes

@@ -1,4 +1,5 @@
 import Tornado.Cli.RelayerSend
+import Tornado.Runtime.ReservationAdmission
 import Tornado.Cli.WithdrawalSession
 import Tornado.Cli.WithdrawOne
 
@@ -82,8 +83,7 @@ def run (input : Input) : IO (String × UInt32) := do
   if !supportsClassicRelayer pool then
     throw <| IO.userError "Classic relayers support only original Tornado pools; use the 4337 route for this denomination."
   let path ← statusPath input.statusDir metadata
-  if ← (System.FilePath.mk path).pathExists then
-    throw <| IO.userError s!"This note already has a withdrawal attempt at {path}. Reconcile it before preparing another proof."
+  let _ ← ReservationAdmission.requireUnclaimed #[path]
   let session ← WithdrawalSession.inspectLive input.rpcUrl metadata input.assetsDir input.cacheDir
   let readonly ← RelayerSend.nativeEffects input.rpcUrl
   let quote ← RelayerSend.prepareWith readonly session.pool

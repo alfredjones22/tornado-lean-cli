@@ -5,10 +5,12 @@ number-theoretic transform needed by the pinned Tornado Groth16 prover. It
 uses the BN254 scalar field, NQR **7**, and supports power-of-two arrays up to
 65,536 values (twice the 32,768-row proving domain). The root calculator
 checks that the chosen root has the requested exact power-of-two order, and
-inversion checks its multiplicative result. Two Lean theorems certify that a
-successful inverse call returned a multiplicative inverse under the executable
-field operation and that an accepted root passed all executable domain/order
-guards. This does **not** prove the FFT algorithm itself.
+inversion checks its multiplicative result. The separate
+[mathematical workspace](../proofs/README.md) certifies the scalar prime and
+constructs the actual inverse for every nonzero modeled input. It constructs
+canonical roots of exact multiplicative order for every admitted size, and
+proves the actual indexed butterfly and forward/normalized-inverse two-point
+DFT semantics. General FFT/IFFT and H/QAP correctness remain open.
 
 The pinned TypeScript SDK's `createTornadoProver` passes `nqr: 7` into
 `micro-zk-proofs@0.3.1`; that library uses `@noble/curves`' BN254 Fr FFT. The
@@ -40,7 +42,9 @@ inverse requests. These are finite compatibility tests, not a universal proof.
 `calculateH` is a pure building block; it accepts ordinary arrays and does not
 carry the proving key's digest proof itself. The complete proof pipeline obtains
 its polynomials through `authenticatePinnedKey` and `decodeFullKey`, checks the
-complete witness, and binds the resulting H to the same circuit/key. This code
+complete witness, and records that the same witness and decoded key supplied
+the native H calculation. This is original-input execution provenance, not a
+proved QAP identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md). This code
 is variable-time bigint arithmetic, used by the isolated experimental worker
 with no constant-time or erasure guarantee and no side-channel certification.
 Groth16 MSMs, blinding, pairing verification and withdrawal

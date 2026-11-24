@@ -105,6 +105,25 @@ private def acceptPoints (circuit : WitnessVM.PinnedCircuit)
             hsignals, hproof, hbytes, hverified⟩, rfl⟩
   else .error "Native proof public signals differ from the reviewed withdrawal."
 
+/-- Acceptance retains the exact original checked point computation. -/
+private theorem acceptPoints_uses_original (circuit : WitnessVM.PinnedCircuit)
+    (checked : Groth16MSM.CheckedProofPoints circuit) (expectedSignals : Array Nat)
+    (accepted : AcceptedPoints circuit expectedSignals)
+    (success : acceptPoints circuit checked expectedSignals = .ok accepted) :
+    accepted.artifact.checkedPoints = checked := by
+  unfold acceptPoints at success
+  split at success
+  · split at success
+    · cases success
+    · split at success
+      · cases success
+      · split at success
+        · cases success
+        · cases success
+        · cases success
+          rfl
+  · cases success
+
 /-- Public output only. The checked witness and withdrawal input occur in a
     proposition, which is erased from the compiled result. -/
 structure PublicProof (circuit : WitnessVM.PinnedCircuit) where
@@ -117,26 +136,121 @@ structure PublicProof (circuit : WitnessVM.PinnedCircuit) where
     artifact.expectedSignals = signals ∧
     artifact.expectedSignals = reviewed.signals
 
-/-- Complete native public-reference proving route. Caller supplied `r,s`
-    are required to be nonzero canonical Fr elements. They are deliberately
-    explicit, so callers cannot mistake a deterministic fixture for securely
-    randomized production blinding. -/
+/-- Source provenance of the actual native computation. All key/witness/H
+and blinding evidence is erased; this does not assert mathematical QAP or
+pairing completeness for arbitrary valid inputs. -/
+structure OriginalConstruction (assets : PinnedAssets)
+    (withdrawal : TornadoWitness.WithdrawalInput) (r s : Nat)
+    (result : PublicProof assets.circuit) : Prop where
+  reviewedOriginal : result.reviewed = ReviewedPublic.ofWithdrawal withdrawal
+  signalsOriginal : result.signals = (ReviewedPublic.ofWithdrawal withdrawal).signals
+  trace : ∃ (inputs : Array Nat) (checked : Groth16MSM.CheckedProofPoints assets.circuit),
+    TornadoWitness.prepareInputPrefix withdrawal = .ok inputs ∧
+    inputs.extract 1 7 = (ReviewedPublic.ofWithdrawal withdrawal).signals ∧
+    Groth16MSM.Derivation assets.key assets.graph assets.circuit inputs
+      withdrawal.note.commitment r s checked.witness checked.points ∧
+    checked.points.publicSignals = result.signals ∧
+    Groth16MSM.solidityProofBytes checked.points = .ok result.bytes ∧
+    ∃ proof, toVerifierProof checked.points = .ok proof ∧
+      ClassicVerifyingKey.verifyClassic proof result.signals = .ok true
+
+/-- The type indices retain the original input without storing secret data
+in the public value. The sole additional field is an erased proposition. -/
+structure PreparedPublicProof (assets : PinnedAssets)
+    (withdrawal : TornadoWitness.WithdrawalInput) (r s : Nat) where
+  private mk ::
+  value : PublicProof assets.circuit
+  constructed : OriginalConstruction assets withdrawal r s value
+
+/-- Complete native public-reference proving route with source provenance.
+The caller supplies nonzero canonical blinding scalars. -/
+def preparePublicProof (assets : PinnedAssets) (withdrawal : TornadoWitness.WithdrawalInput)
+    (r s : Nat) : Except String (PreparedPublicProof assets withdrawal r s) :=
+  if r == 0 || s == 0 || r >= BN254G1.scalarPrime || s >= BN254G1.scalarPrime then
+    .error "Classic proof blinding scalars must be nonzero canonical Fr values."
+  else
+    match hi : TornadoWitness.prepareInputPrefix withdrawal with
+    | .error message => .error message
+    | .ok inputs =>
+      let reviewed := ReviewedPublic.ofWithdrawal withdrawal
+      let expectedSignals := reviewed.signals
+      if hprefix : inputs.extract 1 7 != expectedSignals then
+        .error "Withdrawal public input prefix differs from reviewed values."
+      else
+        match hd : Groth16MSM.deriveCheckedProofPoints assets.key assets.graph
+            assets.circuit inputs withdrawal.note.commitment r s with
+        | .error message => .error message
+        | .ok checked =>
+          match ha : acceptPoints assets.circuit checked expectedSignals with
+          | .error message => .error message
+          | .ok accepted =>
+            let artifact := accepted.artifact
+            let result : PublicProof assets.circuit :=
+              ⟨artifact.bytes, artifact.expectedSignals, reviewed,
+                ⟨artifact, rfl, rfl, accepted.binding⟩⟩
+            .ok ⟨result, by
+              have retained := acceptPoints_uses_original assets.circuit checked expectedSignals accepted ha
+              have prefixEqual : inputs.extract 1 7 = expectedSignals := by simpa using hprefix
+              refine ⟨rfl, accepted.binding, inputs, checked, hi, prefixEqual,
+                Groth16MSM.derive_success_from_original assets.key assets.graph assets.circuit
+                  inputs withdrawal.note.commitment r s checked hd, ?_, ?_, artifact.proof, ?_, ?_⟩
+              · rw [← retained]
+                exact artifact.signalsEqual
+              · rw [← retained]
+                exact artifact.serialization
+              · rw [← retained]
+                exact artifact.proofMatchesPoints
+              · exact artifact.verification⟩
+
+/-- Existing API: the prepared certificate is erased and only public fields
+are returned. Source-success theorems retain its exact original binding. -/
 def prove (assets : PinnedAssets) (withdrawal : TornadoWitness.WithdrawalInput)
-    (r s : Nat) : Except String (PublicProof assets.circuit) := do
-  if r == 0 || s == 0 || r >= BN254G1.scalarPrime ||
-      s >= BN254G1.scalarPrime then
-    throw "Classic proof blinding scalars must be nonzero canonical Fr values."
-  let inputs ← TornadoWitness.prepareInputPrefix withdrawal
-  let reviewed := ReviewedPublic.ofWithdrawal withdrawal
-  let expectedSignals := reviewed.signals
-  if inputs.extract 1 7 != expectedSignals then
-    throw "Withdrawal public input prefix differs from reviewed values."
-  let checked ← Groth16MSM.deriveCheckedProofPoints assets.key assets.graph
-    assets.circuit inputs withdrawal.note.commitment r s
-  let accepted ← acceptPoints assets.circuit checked expectedSignals
-  let artifact := accepted.artifact
-  return ⟨artifact.bytes, artifact.expectedSignals, reviewed,
-    ⟨artifact, rfl, rfl, accepted.binding⟩⟩
+    (r s : Nat) : Except String (PublicProof assets.circuit) :=
+  (preparePublicProof assets withdrawal r s).map (·.value)
+
+theorem prove_success_from_original (assets : PinnedAssets)
+    (withdrawal : TornadoWitness.WithdrawalInput) (r s : Nat)
+    (result : PublicProof assets.circuit)
+    (success : prove assets withdrawal r s = .ok result) :
+    OriginalConstruction assets withdrawal r s result := by
+  unfold prove at success
+  cases prepared : preparePublicProof assets withdrawal r s with
+  | error message => simp [prepared, Except.map] at success
+  | ok preparedResult =>
+    simp only [prepared, Except.map] at success
+    cases success
+    exact preparedResult.constructed
+
+theorem prove_success_binds_original_review (assets : PinnedAssets)
+    (withdrawal : TornadoWitness.WithdrawalInput) (r s : Nat)
+    (result : PublicProof assets.circuit)
+    (success : prove assets withdrawal r s = .ok result) :
+    result.reviewed = ReviewedPublic.ofWithdrawal withdrawal ∧
+      result.signals = (ReviewedPublic.ofWithdrawal withdrawal).signals := by
+  have built := prove_success_from_original assets withdrawal r s result success
+  exact ⟨built.reviewedOriginal, built.signalsOriginal⟩
+
+/-- Exact original-input native construction and byte provenance. This is
+an execution provenance theorem, not Groth16 algebraic completeness. -/
+theorem prove_success_assembled_and_serialized (assets : PinnedAssets)
+    (withdrawal : TornadoWitness.WithdrawalInput) (r s : Nat)
+    (result : PublicProof assets.circuit)
+    (success : prove assets withdrawal r s = .ok result) :
+    ∃ (inputs witness : Array Nat) (decoded : ProvingKey.ParsedKey)
+      (h : Array Nat) (points : Groth16MSM.ProofPoints),
+      TornadoWitness.prepareInputPrefix withdrawal = .ok inputs ∧
+      WitnessVM.generateCheckedWitness assets.graph assets.circuit inputs
+        withdrawal.note.commitment = .ok witness ∧
+      ProvingKey.decodeFullKey assets.key = .ok decoded ∧
+      FrFFT.calculateH decoded.header.domainSize witness decoded.polsA decoded.polsB = .ok h ∧
+      Groth16MSM.assembleParsed decoded witness h r s = .ok points ∧
+      Groth16MSM.solidityProofBytes points = .ok result.bytes ∧
+      points.publicSignals = (ReviewedPublic.ofWithdrawal withdrawal).signals := by
+  have built := prove_success_from_original assets withdrawal r s result success
+  obtain ⟨inputs, checked, inputBuilt, _, derivation, signals, bytes, _⟩ := built.trace
+  obtain ⟨decoded, h, witnessBuilt, keyBuilt, hBuilt, assembled⟩ := derivation
+  exact ⟨inputs, checked.witness, decoded, h, checked.points, inputBuilt,
+    witnessBuilt, keyBuilt, hBuilt, assembled, bytes, signals.trans built.signalsOriginal⟩
 
 /-- A returned artifact has passed the exact native full R1CS gate. -/
 theorem checked_artifact_has_full_witness (circuit : WitnessVM.PinnedCircuit)
@@ -209,3 +323,9 @@ end Tornado.Protocol.ClassicProofPipeline
 #print axioms Tornado.Protocol.ClassicProofPipeline.public_proof_checked_and_encoded
 #print axioms Tornado.Protocol.ClassicProofPipeline.public_proof_verified
 #print axioms Tornado.Protocol.ClassicProofPipeline.public_proof_signals_bounded
+
+#print axioms Tornado.Protocol.ClassicProofPipeline.acceptPoints_uses_original
+#print axioms Tornado.Protocol.ClassicProofPipeline.prove_success_from_original
+#print axioms Tornado.Protocol.ClassicProofPipeline.prove_success_binds_original_review
+
+#print axioms Tornado.Protocol.ClassicProofPipeline.prove_success_assembled_and_serialized

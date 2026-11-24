@@ -1,6 +1,9 @@
 # Native Lean proof scope
 
-The theorems below import native Lean definitions. `lake build Tornado` kernel-checks them with pinned Lean 4.29.1. `#print axioms` is emitted for every theorem; the verifier accepts only Lean's standard `propext`, `Classical.choice`, and `Quot.sound`. There are no custom axioms, `sorry`, or `admit` in the compiled proof modules. The runnable CLI exposes read-only routes and explicitly experimental deposit, one-note 4337/Classic-relayer withdrawal, batch-withdrawal and recovery send adapters. The pure money-path policy theorems are not end-to-end proofs of these runnable adapters. Approved C OS/HTTPS/signing boundaries and the installed worker executable remain trusted. This is best-effort verification, not a guarantee of bug-free software or fund safety.
+The application and pure-library theorems import native Lean definitions.
+Their Lake builds check those modules; `lake -d proofs build` separately checks
+the Mathlib representation and construction results. The kernel-only verifier
+builds and inventories all three workspaces with pinned Lean 4.29.1. `#print axioms` is emitted for every theorem; the verifier accepts only Lean's standard `propext`, `Classical.choice`, and `Quot.sound`. There are no custom axioms, `sorry`, or `admit` in the compiled proof modules. The runnable CLI exposes read-only routes and explicitly experimental deposit, one-note 4337/Classic-relayer withdrawal, batch-withdrawal and recovery send adapters. The pure money-path policy theorems are not end-to-end proofs of these runnable adapters. Approved C OS/HTTPS/signing boundaries and the installed worker executable remain trusted. This is best-effort verification, not a guarantee of bug-free software or fund safety.
 
 ## Finite catalog and plan validation
 
@@ -22,6 +25,18 @@ authorization plus the complete serialized bytes. Callback contracts,
 including all-selected-path durable reservation, and native IO remain trusted.
 This is a command-machine refinement for sponsored withdrawals, not a theorem
 covering every command, physical effect, crash or restart.
+
+The actual `WithdrawalJournal` now uses the shared finite protected-file
+interpreter and returns exact mirror acknowledgement certificates before
+advancing memory state. Its physical-model bridge proves exact stored candidate
+bytes and conditional readmission blocking after interrupted updates. Native
+route admission treats metadata failures and partial claims conservatively;
+batch repair checks serialized reservation identity before any CAS. These
+claims and the five real native process-cut tests are described in
+[reservation and restart scope](RESERVATION_RECOVERY_SCOPE.md). Physical
+durability, callback honesty and global uniqueness across copied directories
+remain assumptions, and shared single-file writes do not establish complete
+effect refinement for every deposit/relayer/recovery command.
 
 `PolicyProofs.lean` proves that simulation admission has the reviewed normalized UserOperation hash and the source's upper age bound, and that an explicit failed result cannot pass. The source age predicate has no lower bound, so a future timestamp can pass; the theorem preserves that behavior rather than silently strengthening it.
 
@@ -45,13 +60,65 @@ The direct one-note policy theorems prove that signing binds the reviewed hash; 
 
 `Protocol/Rlp.lean` proves three narrow encoding guards for EIP-1559/7702 and checks 20 viem vectors. `TypedTransaction.lean` and `TypedTransactionDecode.lean` sign and canonically decode EIP-1559/7702 payloads and check 43 pinned viem cases. `SetCodeValidity.lean` adds a strict stateless envelope/intent gate beyond viem serializer compatibility; nine theorems capture accepted shape, intrinsic gas and effective authorization guards. None of these establishes account state, nonce freshness, fee adequacy, or chain acceptance.
 
-`Protocol/Groth16R1CS.lean` checks a complete witness against all 28,275 pinned Tornado constraints and proves the individual row/index and equation checks. `WitnessVM.lean` now generates all 28,300 slots in native Lean and authenticates the decoded R1CS before returning a checked witness. Four public cases pass, one matching every SDK witness slot. Five theorems cover selected bit/mux properties and the final checked-witness gate. A separate public fixture produces exact proof bytes, but these theorems do not prove proof-generation correctness or Circom-to-Lean equivalence for every possible input. See [Groth16 scope](GROTH16_SCOPE.md).
+`Protocol/Groth16R1CS.lean` checks a complete witness against all 28,275 pinned Tornado constraints and proves the individual row/index and equation checks. `WitnessVM.lean` now generates all 28,300 slots in native Lean and authenticates the decoded R1CS before returning a checked witness. Four public cases pass, one matching every SDK witness slot. The checked-witness gate is supplemented by `Spec/WitnessGadgets.lean`:
+constructive Num2Bits248 and DualMux results start from original inputs,
+graph-slot bounds and compatible aliases, assign the actual stored signals,
+establish their equations and preserve existing assignments. They do not
+assume the final R1CS checker succeeded. Other gadgets and global circuit
+correspondence remain separate obligations. A separate public fixture produces exact proof bytes, but these theorems do not prove proof-generation correctness or Circom-to-Lean equivalence for every possible input. See [Groth16 scope](GROTH16_SCOPE.md).
 
 `Protocol/TornadoWitness.lean` computes the first 49 input slots natively, after checking note preimages, the nullifier hash, a 20-level MiMC path, and a caller-supplied expected root. Four theorems cover prefix length and selected slot positions, and a pinned full-witness fixture checks all 49 slots. `WitnessVM.lean` fills the remaining slots as described above. The expected root is not authenticated against chain history here; see [witness scope](WITNESS_SCOPE.md).
 
 `Protocol/Groth16Key.lean` rejects any key header whose dimensions or section offsets differ from the pinned proving key and proves that a successful parse satisfies its layout predicate. `Protocol/ProvingKey.lean` authenticates the full uncompressed digest and parses every key section, validating G1 curve and G2 twist equations, canonical field encodings, and polynomial bounds. It does not establish G2 subgroup membership, trusted-setup security, or proof production; see [key scope](PROVING_KEY_SCOPE.md).
 
-`Protocol/BN254G1.lean` implements bounded base-field arithmetic and G1 Jacobian point operations. Four theorems prove field-result bounds and that an accepted inverse passed its executable multiplicative check. Fourteen pinned noble scalar/addition vectors test its point arithmetic. These facts do not prove the group law, constant-time behavior, pairing validity, or complete Groth16 proof production; see [G1 scope](BN254_G1_SCOPE.md).
+The application BN254 and Groth16 modules alias the canonical `LeanCrypto`
+implementations. The separate [proof workspace](../proofs/README.md) proves
+numerical primality of the actual base/scalar moduli using kernel-checked
+certificates. `FpModel` and `FrModel` relate native addition, subtraction,
+multiplication and total binary exponentiation to `ZMod`; the closed prime
+facts construct the actual checked inverse for every nonzero modeled input.
+These are mathematical implementation results, beyond finite vector parity.
+
+`JacobianModel`, `G1GroupLaw`, `JacobianNormalization` and
+`NormalizationGroupLaw` handle admitted G1 representations: canonical native
+infinity, or a finite point with nonzero Z and `Y² = X³ + 3Z⁶`. Actual native
+addition and doubling map to addition in Mathlib's proved elliptic-curve group,
+including equal, opposite and infinity branches. Actual normalization
+constructs an on-curve affine result or canonical infinity and represents that
+same group point, without a normalization-success premise. The group laws
+hold after mapping representations, not as equality of arbitrary raw Jacobian
+coordinate triples. The total native scalar loop preserves admission and maps to
+`(n % q) • P`, where `q` is the BN254 scalar prime; for canonical
+`n < q` it maps to `n • P`. This does not prove
+G1 group/subgroup order or remove the modulo restriction for arbitrary n.
+The actual windowed G1 MSM is also connected to its mathematical weighted sum.
+The proof covers the private bucket-fill, bucket-collapse and Horner/window
+algorithm, then transports it through the native G1 group representation.
+`msmG1_success_sum` binds a successful public call to the exact ordered decoding
+of the original point array, equal point/scalar counts, canonical original
+scalars, an admitted result and the sum of each original scalar times its
+decoded point. The theorem states weights modulo q; the accepted scalars are
+already below q. `msmG1_success_normalized_sum` constructs actual normalization
+of that result as the same mathematical sum, possibly infinity. These are
+G1 MSM semantics on accepted inputs, not G2 MSM, subgroup-order or full Groth16
+point-assembly correctness.
+No constant-time, erasure, pairing or Groth16 security claim follows.
+
+`RootConstruction` constructs canonical roots of exact multiplicative order
+for every admitted FFT size, the powers of two through 65,536. `ButterflyModel`
+proves the actual indexed butterfly's field meaning and preservation properties;
+`TwoPointModel` proves the actual forward and normalized inverse two-point
+DFT. These results do not prove the general transform, H-polynomial derivation,
+QAP/key/circuit relation or universal proof-construction success.
+
+`ProofCodec` connects the actual private serializer word loop to fixed-width
+big-endian encoding. Given admitted affine normalization outputs, the actual
+Solidity serializer constructs 256 bytes, and a structural decoder recovers
+all eight ordered limbs, including the G2 `c1,c0` order. That limb encoding is
+injective and retains leading zeros. `NormalizedProofCodec` discharges the
+G1 A/C normalization premises from their independent finite curve equations;
+it still requires an actual G2 affine normalization output. This is not a
+G2-normalization, verifier-parser, or ideal-triple-to-proof-bytes theorem.
 
 `Protocol/BN254G2.lean` adds quadratic-extension and twist G2 arithmetic. Fourteen pinned noble scalar/addition vectors and a generator-order check pass, but no arbitrary-point subgroup theorem exists; see [G2 scope](BN254_G2_SCOPE.md). `BN254PairingField.lean`, `BN254TatePairing.lean`, and `BN254Groth16Verify.lean` add a public-point reduced Tate pairing and the Classic four-pair equation. Seven theorems cover executable inverse, output-order, and signal-bound guards. A pinned full-size public proof passes and all six changed signals fail. They do not establish extension-field laws, Miller-loop correctness, Groth16 soundness, or optimal-Ate correspondence; see [pairing scope](BN254_PAIRING_STATUS.md).
 
@@ -59,18 +126,44 @@ The direct one-note policy theorems prove that signing binds the reviewed hash; 
 
 The pinned CLI and SDK catalogs list pool addresses and denominations but no expected deployed pool runtime hashes. Their `eth_getCode` use establishes code presence only; the one pinned CLI code hash belongs to the unrelated Simple7702 implementation. A safe deployed-pool identity gate therefore needs an audited, source-derived manifest for the supported pool variants before this Lean port can compare exact code at a selected block. A caller-supplied hash would not fill that trust gap.
 
-`Protocol/ClassicProofPipeline.lean` composes authenticated compressed assets, the complete checked witness, proof assembly, serialization, and compiled-key public verification. Its returned runtime object contains only public bytes and signals; the secret-bearing checked artifact exists in an erased proposition. Eight theorems bind the public result to reviewed signals and the executable witness, encoding, and verification gates. One unfunded public fixture matches the pinned SDK's exact 256 proof bytes. This does not prove Groth16 arithmetic or soundness for every input, secret-safe computation, or a deployed pool's verifier identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
+`Protocol/ClassicProofPipeline.lean` composes authenticated compressed assets, the complete checked witness, proof assembly, serialization, and compiled-key public verification. Its returned runtime object contains only public bytes and signals; the secret-bearing checked artifact exists in an erased proposition. Its existing gates bind returned public fields to the checked witness and
+compiled-key verification. `prove_success_from_original` and
+`prove_success_assembled_and_serialized` additionally trace a successful result
+from the original pinned assets, withdrawal input and supplied `r,s`, through
+input-prefix construction, the actual witness generator, full key decoding,
+`calculateH`, point assembly and the exact serialized returned bytes. This is
+execution provenance from original inputs, not a proof that valid inputs
+universally construct a proof or that H/points satisfy Groth16 algebra. One unfunded public fixture matches the pinned SDK's exact 256 proof bytes. This does not prove Groth16 arithmetic or soundness for every input, secret-safe computation, or a deployed pool's verifier identity; see [pipeline scope](CLASSIC_PROOF_PIPELINE_SCOPE.md).
 
-`Runtime/ProofBlinding.lean` samples nonzero canonical Fr values by bounded rejection from kernel CSPRNG reads. Its admission theorem proves the accepted candidate's 32-byte shape and field range. `Spec/BlindingDistribution.lean`, `Spec/BlindingPair.lean` and `Spec/BlindingBounds.lean` give finite counting proofs for the shared bounded loop, conditional on IID uniform decoded 256-bit candidates. These do not prove OS entropy, full prover zero knowledge, secret-independent later failures, constant-time behavior or zeroization; see [sampler scope](PROOF_BLINDING_SCOPE.md).
+`Runtime/ProofBlinding.lean` samples nonzero canonical Fr values using the
+shared bounded rejection loop. The canonical probability modules count all
+success and exhaustion outcomes. `ByteEntropy` proves the actual full-width
+decoder bijection and byte-event transport. In the proof workspace,
+`SamplerField` proves the canonical scalar-to-nonzero-`ZMod` bijection and
+arbitrary-event pushforward for the actual shared sequential sampler, including
+its retry-failure mass; this closes the label-to-field gap.
+
+`Groth16IdealPrivacy` fixes a common public setup with nonzero δ and compatible
+ideal witness offsets satisfying `δK = AB − κ`. Affine mask transport preserves
+the ideal triple, giving exact equal counts for full-field masks. For nonzero
+masks, every common deterministic observation event has probability difference
+at most `4q/(q−1)²`, also for the bounded sampler with its common failure outcome.
+`SamplerField` transfers that bound to the field-cast observation of the shared
+pure byte sampler. The entropy contract remains IID uniform source bytes.
+The complete native worker, all additional failures, complete proof-assembly/QAP/G2/pairing computation
+and release observations are not yet proved to factor through that ideal
+triple. OS-source coupling, timing, resources, erasure and history/RPC privacy
+remain outside the result; see [sampler scope](PROOF_BLINDING_SCOPE.md).
 
 `Runtime/WorkerProgram.lean` is the restricted effect language interpreted by
 the actual worker entry point. `Spec/WorkerDisclosure.lean` proves mode-specific
 read/entropy confinement, protection-first trace structure and the canonical
 typed output or constant-failure envelope, including request binding at
 release. No unrestricted IO prover callback is hidden in the program. The
-interpreter, OS and opaque cryptographic output contents are trust boundaries.
-These are capability and format claims, not absence of covert channels or a
-zero-knowledge theorem. See [worker scope](PROVER_WORKER_SCOPE.md).
+interpreter, OS and cryptographic output contents remain trust boundaries.
+No theorem factors the complete worker's success, additional failure or release
+observation through the ideal scalar triple. These are capability and format
+claims, not absence of covert channels or implementation zero knowledge. See [worker scope](PROVER_WORKER_SCOPE.md).
 
 `Protocol/DirectWithdrawalIntent.lean` is an executable gate in the direct
 sponsored builder. Five theorems bind its decoded pool/recipient/fee and other
@@ -78,6 +171,57 @@ reviewed fields, exclude direct execution calls, and prove canonical sponsor
 bytes by the decoder/re-encoder theorem. Twenty-two synthetic mutations
 exercise rejection of changed sponsor or operation fields. Neither this gate
 nor its tests prove contract semantics or crypto security.
+
+`Protocol/AbiDecode.lean` adds independent bounded readers for complete
+composed batches, Classic withdrawals, token transfers and the pinned factory
+call. Canonical reencoding rejects alternate offsets, overlap, padding and
+trailing bytes. Its theorems cover exact reencoding and count/field/byte bounds.
+`Protocol/BatchWithdrawalIntent.lean` compares these decoded semantic fields
+with original inputs, rather than comparing with an expected encoded payload.
+The actual `SponsoredWithdrawal.batch` returns an operation through this gate;
+`batch_success_decodes` proves that builder success implies the input-derived
+intent and decoded field agreement. `Spec/ReviewBatchIntent.lean` carries the
+statement through the actual prepared review and signature-only final payload.
+This is builder acceptance soundness; it does not assume or establish deployed
+contract behavior or universal successful construction for every valid note.
+
+`Protocol/DepositIntent.lean` independently decodes deposit/approval calldata
+and signed type-2 transactions. The actual invoice and multi-note planners
+carry certificates indexed by the original public items and reading snapshot.
+Successful plans preserve ordered commitments, denomination-valued ETH or
+zero-valued token deposits, exact per-pool approvals, chunk policy and route
+reason. Both sequential sign adapters check the final serialized transaction.
+`Protocol/DepositCallsIntent.lean` checks the actual Simple7702 execute/batch
+bytes, including the final signed operation's calldata. The separate 7702
+delegation can already be executable during estimation and has its own review
+and durable uncertainty record; this calldata theorem does not restrict that
+authorization cryptographically to the deposit.
+
+`Spec/DepositBackupIntent.lean` constructs the actual formatter → parser →
+public-item projection for admitted source records. Grammar, catalog/network,
+asset and nullifier-distinctness conditions are independent preconditions;
+the generic source record also names identity/hash and commitment-hex
+obligations. The actual successful independent/seeded constructors now supply
+that identity, hex, grammar and renderer evidence through `Source.ofIndependent`
+and `Source.ofSeeded`. Their backup theorems construct the formatter, parser
+and public-item result without assuming final backup parsing succeeded.
+Catalog/network, count, same-asset, nullifier-distinctness and applicable phrase
+conditions remain explicit. This does not prove cryptographic primitive
+security or successful creation for every possible entropy input.
+The executable canonical splitter is tail recursive and proved equivalent
+to its structural definition; malformed one-MiB inputs and 100-note backups
+exercise its stack behavior. Legacy note extraction remains the fallback.
+
+The deposit and local-EVM checks establish encoding and finite integration
+evidence, not authenticated RPC state, token semantics, universal successful
+construction, signer correctness, successful mining or eventual withdrawability.
+
+`Encoding/FixedBytes.lean` proves fixed-width bounds and both codec inverse
+laws. `Spec/ByteEntropy.lean` identifies the runtime fold decoder with that
+codec, proves its uint256 bijection, and derives weighted byte-source counts
+for all shared draw-tree events. The source-byte distribution and OS behavior
+remain assumptions; the codec distribution link is a theorem. Public tests
+exhaust all 65,536 two-byte inputs and include biased-decoder negative controls.
 
 `Policy/EvidenceBridge.lean` composes the strict event decoder with the one-note and batch policy confirmation transitions. Its two theorems prove that an accepted bridge confirmation has exact decoded event evidence, a matching signed operation hash, the selected batch nullifiers where applicable, and an accepted native policy transition. The bridge still receives receipt status, logs, expected fields, and policy state from its caller; no RPC authenticity, finality, or durable state reachability is proved.
 
@@ -105,7 +249,7 @@ Twelve additional theorems about the concrete pure replay and claim-name functio
 
 ## Trust boundary and unproved properties
 
-The Lean kernel, compiler, standard runtime, platform integer/byte-array behavior, and OS remain trusted. Crypto vector parity checks functional outputs for selected inputs but do not prove collision resistance, constant-time behavior, or secure randomness. The static catalog and test oracle are pinned to a particular TypeScript/SDK revision; deployed contracts are not proved to match it.
+The Lean kernel, compiler, imported dependency/build artifacts, standard runtime, platform integer/byte-array behavior, and OS remain trusted. The mathematical checks use pinned Mathlib sources and official precompiled caches; project proof compilation is not a fresh source rebuild of every dependency. Crypto vector parity checks functional outputs for selected inputs but do not prove collision resistance, constant-time behavior, or secure randomness. The static catalog and test oracle are pinned to a particular TypeScript/SDK revision; deployed contracts are not proved to match it.
 
 Connected experimental send adapters have protected journals and injected fault tests for review binding, reservation-before-exposure and stopping on ambiguity. There is no theorem that their actual C/HTTPS effects refine the abstract durable-reservation model. Exact recipient/pool/amount/fee and call ordering, signed-byte bindings, no blind retry and receipt/event checks are runtime properties with partial proof and test coverage. Secret-safe proving, authenticated worker/deployed-pool/verifier binding, consensus-state authentication and funded testnet validation are not established. The worker uses variable-time arithmetic and does not guarantee secret erasure. No real or funded transaction was performed during development; these results do not support an end-to-end production fund-safety claim.
 

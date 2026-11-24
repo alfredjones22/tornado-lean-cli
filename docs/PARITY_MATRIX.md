@@ -52,6 +52,38 @@ They are not resolved merely by adding more proofs over the current code.
 
 Lean theorems constrain selected native definitions: catalog facts, ABI/transaction encodings, event matching, fee arithmetic, planner conservation, policy transitions, and abstract effect ordering. The sponsored runner now uses the proved `WithdrawalDriver` command machine, binding full canonical authorized bytes and callback ordering. The real worker uses a restricted effect language with a proved typed release envelope. The sampler's shared loop has finite distribution/independence/exhaustion proofs under IID uniform decoded candidates. Read-only differential coverage is 156 catalog/planner/version cases plus six note-file cases. Other send engines retain focused offline compatibility and injected fault tests. No theorem establishes physical C/HTTPS effects or whole-program correctness. See the [withdrawal security specification](WITHDRAWAL_SECURITY_SPEC.md).
 
+The batch builder additionally carries an original-input semantic certificate:
+independent canonical decoders bind its withdrawal prefix, sponsor tuple,
+ordered suffix or ETH/token net forwarding, deployment and gas policy. Its
+actual public success theorem reaches the prepared review used by the driver.
+The byte-entropy bridge proves that the runtime uint256 decoder is bijective.
+`SamplerField` additionally transfers arbitrary events of the shared sequential
+sampler through canonical scalar-to-field conversion, retaining retry failure.
+The resulting bound concerns observations of a compatible ideal field triple,
+not yet the complete worker's released bytes and additional failures.
+
+The [mathematical workspace](../proofs/README.md) certifies the actual field
+primes and native field/inverse operations, exact-order admitted roots, the
+indexed butterfly and two-point DFT/IFFT, and G1 addition/doubling/normalization
+mapped to Mathlib's elliptic-curve group. The actual Solidity proof-byte codec
+has fixed-width construction and eight-limb recovery results, with G2 affine
+normalization still explicit. Successful actual windowed G1 MSM calls now bind
+the original ordered point decoding and original canonical scalars to the exact
+mathematical weighted sum and construct normalization of that result. A successful Classic pipeline result also has
+exact provenance from its original assets, withdrawal input and supplied
+blinding through witness/H/point construction and returned bytes. This is
+execution provenance, not universal valid-input success or Groth16 algebraic
+completeness. Remaining witness-gadget correspondence, general FFT/H/QAP,
+group/subgroup order, G2 MSM/group,
+pairing, OS-source coupling and full worker-observation
+factorization remain open.
+
+The [local EVM suite](LOCAL_EVM_SCOPE.md) checks actual Classic verifier,
+SimpleAccount/factory and paymaster code with native calldata and three public
+proofs, including the actual sponsored batch builder. Its EntryPoint, pool,
+token and address/storage placement are synthetic. These are independent
+interoperability tests, not proofs of deployed state or full `handleOps`.
+
 An internal one-note proof-to-call builder joins a protected note, selected-pool history, exact-block root/leaf/spent checks, authenticated proving assets, fresh blinding, and Classic calldata. A public unfunded fixture matched the pinned SDK's 256-byte proof and call encoding in about 194 seconds. Runnable commands instead use the isolated worker/session route; neither prover route has constant-time or secure-erasure guarantees.
 
 The separate [Classic prover worker](PROVER_WORKER_SCOPE.md) moves note reading, proof generation and direct note-derived signing into a child process. The parent sends only canonical public inputs, caps the response, checks request hashes and all six signals, verifies proofs against the compiled Classic key, and builds bound calldata. Experimental commands use the sibling executable. Public unfunded fixtures exercise real proof generation. Process isolation does not make its Lean-managed witness and variable-time arithmetic secret safe, and the executable's installation is trusted rather than authenticated by Lean.
@@ -84,3 +116,7 @@ runnable command refinement remains unproved. Constant-time/zeroizing note
 handling, authenticated worker and deployed-code binding, exhaustive provider
 fault coverage and funded testnet validation are outside current coverage.
 The variable-time, nonzeroizing worker has no production security guarantee.
+[Build provenance](BUILD_PROVENANCE.md) can bind recorded artifact bytes to a
+fresh full report and support an independent integrity check. The manifest
+and checker need independent trust; runtime worker pinning, release authenticity
+and cross-platform reproducible builds are not established.

@@ -1,3 +1,4 @@
+import Tornado.Crypto.BIP32
 import Tornado.Crypto.Secp256k1
 import Tornado.Crypto.Pedersen
 

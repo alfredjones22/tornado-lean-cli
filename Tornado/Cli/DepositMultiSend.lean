@@ -1,3 +1,4 @@
+import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.DepositMulti
 import Tornado.Runtime.ProtectedTxSender
 
@@ -143,7 +144,11 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
   for index in [0:steps.size] do
     let step := steps[index]!
     let txEffects : ProtectedTxSender.Effects := {
-      rpc := effects.rpc, sign := effects.sign,
+      rpc := effects.rpc,
+      sign := fun tx => do
+        let (actualSender, signed) ← effects.sign tx
+        let _ ← checked <| DepositSend.certifySignedStep step tx signed
+        return (actualSender, signed),
       approve := fun text => effects.approve s!"Step {index + 1}/{steps.size}: {text}",
       revalidate := recheckStep effects items sender step,
       recordPrepared := fun _ signed => update index "prepared" signed.transactionHash,
@@ -183,7 +188,7 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
   let lockBytes := ((Json.mkObj [("version", toJson (1 : Nat)),
     ("kind", toJson ("sender-lock" : String)), ("sender", toJson senderText),
     ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-  ProtectedIO.createPrivate senderLock lockBytes
+  WithdrawalJournalProgram.createProtected senderLock lockBytes
   let created ← IO.mkRef (#[] : Array (String × ByteArray))
   try
     for item in items do
@@ -195,7 +200,7 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
         ("chainId", toJson (chainNumber chain)), ("pool", toJson item.pool.address),
         ("commitment", toJson (hex item.commitment)),
         ("sender", toJson senderText), ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-      ProtectedIO.createPrivate claimPath claim
+      WithdrawalJournalProgram.createProtected claimPath claim
       created.modify (·.push (claimPath, claim))
   catch error =>
     for (path, content) in (← created.get) do
@@ -206,8 +211,8 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
   IO.println s!"Journal: {journalPath}"
   let effects : Effects := {
     rpc := HttpTransport.call rpc,
-    createJournal := ProtectedIO.createPrivate journalPath,
-    replaceJournal := ProtectedIO.replacePrivate journalPath,
+    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
     sign := NativeSigner.sign1559FromProtectedFile keyPath,
     waitFinality := ProtectedTxSender.waitReceiptDepth rpc,
     approve := fun text => do

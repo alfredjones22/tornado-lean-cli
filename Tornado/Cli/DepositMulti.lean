@@ -148,7 +148,7 @@ private def stepsFor (items : Array Item) (readings : Readings) :
 /-- Pure route planner over validated public commitments and a single RPC
     reading snapshot. Later batch approvals are intentionally left to fresh
     re-planning; this pure function does not sign subsequent batches. -/
-def plan (items : Array Item) (chain : ChainId) (sender : Nat)
+private def planCandidate (items : Array Item) (chain : ChainId) (sender : Nat)
     (readings : Readings) (forceSequential : Bool := false) : Except String Plan := do
   validateItems items chain
   if sender == 0 || sender >= 2 ^ 160 ||
@@ -179,10 +179,79 @@ def plan (items : Array Item) (chain : ChainId) (sender : Nat)
     batches := batches.push calls
   return ⟨.simple7702, .undelegatedEOA, items.size, total, batches⟩
 
+/-- Public semantic input retains the exact selected commitment order and
+catalog amounts, separately from the candidate calldata. -/
+def planIntent (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool) : Except String DepositIntent.Input := do
+  let selected ← items.mapM fun item => do
+    let pool ← addressNat item.pool.address
+    let token : Option Nat ← match item.pool.asset.token with
+      | none => pure none
+      | some text => some <$> addressNat text
+    return ({
+      pool, denomination := item.pool.amount, token,
+      commitment := item.commitment.data } : DepositIntent.Item)
+  return {
+    items := selected, sender, chainId := chainNumber chain, actualChainId := readings.chainId,
+    senderHasCode := !readings.senderCode.isEmpty, ethBalance := readings.ethBalance,
+    tokenBalance := readings.tokenBalance,
+    pools := readings.pools.map (fun row => ⟨row.address, row.denomination, row.allowance⟩),
+    forceSequential, limit := depositBatchLimit items[0]!.pool.asset }
+
+def planEncoding (plan : Plan) : DepositIntent.EncodedPlan := {
+  mode := match plan.mode with | .sequential => .sequential | .simple7702 => .simple7702
+  reason := match plan.reason with
+    | .forcedSequential => .forcedSequential | .contractOrDelegated => .contractOrDelegated
+    | .singleDeposit => .singleDeposit | .undelegatedEOA => .undelegatedEOA
+  noteCount := plan.noteCount, amount := plan.amount,
+  batches := plan.batches.map (fun steps => steps.map DepositSend.stepEncoding) }
+
+structure PreparedPlan (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool) where
+  private mk ::
+  output : Plan
+  input : DepositIntent.Input
+  original : planIntent items chain sender readings forceSequential = .ok input
+  checked : DepositIntent.Checked input (planEncoding output)
+
+def preparePlan (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool := false) :
+    Except String (PreparedPlan items chain sender readings forceSequential) :=
+  match planCandidate items chain sender readings forceSequential with
+  | .error error => .error error
+  | .ok output =>
+    match original : planIntent items chain sender readings forceSequential with
+    | .error error => .error error
+    | .ok input =>
+      match DepositIntent.accept input (planEncoding output) with
+      | .error error => .error error
+      | .ok checked => .ok ⟨output, input, original, checked⟩
+
+/-- Certificates bind every actual planner result to original public items
+and this exact snapshot, including fresh forced replanning of later chunks. -/
+def plan (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool := false) : Except String Plan :=
+  (preparePlan items chain sender readings forceSequential).map (·.output)
+
+theorem plan_success_decodes (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool) (output : Plan)
+    (built : plan items chain sender readings forceSequential = .ok output) :
+    ∃ input meaning, planIntent items chain sender readings forceSequential = .ok input ∧
+      DepositIntent.expected input = .ok meaning ∧
+      DepositIntent.decodePlan (planEncoding output) = .ok meaning ∧
+      DepositIntent.PlanPolicy input meaning := by
+  cases prepared : preparePlan items chain sender readings forceSequential with
+  | error error => simp [plan, prepared, Except.map] at built
+  | ok result =>
+    have same : result.output = output := by simpa [plan, prepared, Except.map] using built
+    subst output
+    exact ⟨result.input, result.checked.meaning, result.original,
+      result.checked.original, result.checked.decoded, result.checked.policy⟩
+
 /-- Parse a protected backup to public commitments. The returned list has no
     preimages; callers must not retain or print the original backup text. -/
 def publicItems (raw : String) (chain : ChainId) : Except String (Array Item) := do
-  let candidates ← extractNoteStrings raw
+  let candidates ← parseBackupNotes raw chain
   if candidates.length > 100 then throw "Use at most 100 notes in one deposit session."
   let backup ← parseDepositBackup raw chain
   let mut items := #[]
@@ -288,3 +357,5 @@ def dryRun (notesFile keyFile rpc : String) (chain : ChainId)
   return String.intercalate "\n" lines
 
 end Tornado.Cli.DepositMulti
+
+#print axioms Tornado.Cli.DepositMulti.plan_success_decodes

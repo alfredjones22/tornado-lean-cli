@@ -7,9 +7,19 @@ Vendored dependencies and reference fixtures retain their original license notic
 
 This directory contains the runnable Lean executable, its native libraries, specifications, proofs, compatibility vectors, and verification scripts. It targets clean `tornado-cli-new-era` commit `daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7` with `@kohaku-eth/tornado-cash@0.1.0-alpha.38`. Lean is pinned to `leanprover/lean4:v4.29.1`.
 
-Start with the [withdrawal security specification](docs/WITHDRAWAL_SECURITY_SPEC.md) to review the user-facing rules, their executable definitions, and their assumptions. It distinguishes reviewed-intent and exposure guarantees, worker disclosure confinement, conditional blinding-distribution proofs, and the unproved end-to-end zero-knowledge/completeness claims. **The configured history RPC is trusted with deposit–withdrawal linkage:** it can correlate selected deposit receipt queries with selected nullifier-spent queries.
+Start with the [withdrawal security specification](docs/WITHDRAWAL_SECURITY_SPEC.md) to review the user-facing rules, their executable definitions, and their assumptions. It distinguishes reviewed-intent and exposure guarantees, worker disclosure confinement, sampler distributions and ideal field-model privacy proofs, and the unproved end-to-end zero-knowledge/completeness claims. **The configured history RPC is trusted with deposit–withdrawal linkage:** it can correlate selected deposit receipt queries with selected nullifier-spent queries.
+
+The [security contracts](docs/SECURITY_CONTRACTS.md) state the intended batch, backup, recovery and disclosure properties independently of their encoders and checks. [Verification instructions](docs/VERIFICATION.md) distinguish the kernel-only gate from full regression evidence and describe the [local Solidity/EVM checks](docs/LOCAL_EVM_SCOPE.md).
+
+The reusable [LeanCrypto package](packages/lean-crypto/README.md) has no external
+Lake dependencies. The separate [mathematical proof workspace](proofs/README.md)
+uses pinned Mathlib; the CLI and pure runtime library do not import Mathlib.
 
 ## Build and run
+
+The [reservation and restart scope](docs/RESERVATION_RECOVERY_SCOPE.md) explains
+the runtime-used journal certificates, partial-write handling and conditional
+readmission guarantees, including what concurrent starts can still do.
 
 ```sh
 lake build tornado tornado_prover_worker
@@ -54,8 +64,8 @@ The [separate Classic prover worker](docs/PROVER_WORKER_SCOPE.md) reads protecte
 - Native Lean Keccak-256, SHA-256/HMAC-SHA256, SHA-512/HMAC-SHA512, BLAKE-256, BabyJubJub Pedersen, MiMC sponge, and MiMC Merkle tree code, with pinned compatibility vectors. English BIP39, hardened BIP32, reference secp256k1 deterministic low-S signing, Ethereum address derivation, and the SDK's EIP-712 seeded-note derivation are present. Native raw-note parsing, commitment/nullifier recovery, public invoices, Classic/ERC-20/SimpleAccount ABI, EntryPoint v0.8 UserOperation hashes, EIP-1559 RLP, EIP-7702 authorization hashing, and strict deposit/withdrawal/EntryPoint event decoding are present. Protected owner-key routes sign through the native C boundary; serialization remains Lean.
 - The exact pinned compressed circuit and proving key are bundled under [`assets/proving/`](assets/proving/README.md). Lean computes all 36,528 signals and all 28,300 R1CS witness slots for the pinned Tornado circuit, authenticates the decoded constraints, and checks all 28,275 equations. Four public full-witness cases pass, including a rightmost Merkle path. Lean also authenticates and parses every proving-key section, including all A/B polynomials and G1/G2 query points; see [key scope](docs/PROVING_KEY_SCOPE.md). A public full-size proof fixture is assembled below; this is not a secret-safe production prover. See [native witness scope](docs/WITNESS_VM_SCOPE.md) and [proving scope](docs/GROTH16_SCOPE.md).
 - A native Lean [gzip/DEFLATE decoder](docs/GZIP_SCOPE.md) authenticates and decompresses both pinned proving assets, with output limits, CRC/ISIZE checks, a block-count cap, and finite format vectors. This removes runtime reliance on Node or zlib for the compressed assets; the OS file read remains trusted.
-- Native BN254 base-field, Fp2, G1 and G2 arithmetic passes 14 pinned noble vectors for each group and is used by the isolated prover. These modules are variable-time and not side-channel certified. See [G1](docs/BN254_G1_SCOPE.md) and [G2](docs/BN254_G2_SCOPE.md) scope.
-- Native NQR-7 Fr FFT/IFFT and sparse A/B-to-H derivation pass finite noble vectors and a 32,768-point roundtrip. This is a variable-time prover building block, not a complete or safe production proof generator; see [FFT scope](docs/FR_FFT_SCOPE.md).
+- Native BN254 base-field, Fp2, G1 and G2 arithmetic is used by the isolated prover and has pinned noble compatibility vectors. The proof-only workspace certifies both field primes, native Fp/Fr arithmetic and inverse construction, and actual G1 addition, doubling and normalization under an admitted curve representation. G1 operations correspond to Mathlib's elliptic-curve group after mapping representations; scalar multiplication is proved for canonical scalars and follows the implemented scalar-prime reduction, and the actual windowed G1 MSM has an original-input weighted-sum theorem. G2 MSM/group and pairing correspondence remain open. These implementations remain variable-time and nonzeroizing; see the [mathematical scope](proofs/README.md).
+- Native NQR-7 Fr FFT/IFFT and sparse A/B-to-H derivation have finite noble vectors and a 32,768-point roundtrip. The mathematical proofs construct exact-order roots for every admitted transform size and establish the actual butterfly and two-point DFT/IFFT semantics. General FFT/IFFT, H/QAP and proof-construction completeness remain open; see the [mathematical scope](proofs/README.md) and [FFT scope](docs/FR_FFT_SCOPE.md).
 - Native BN254 G1/G2 windowed MSM and Groth16 point assembly pass finite noble vectors. A compositional [Classic proof pipeline](docs/CLASSIC_PROOF_PIPELINE_SCOPE.md) joins authenticated compressed assets, the complete checked witness, H, proof points and compiled-key verification. Its public, unfunded fixture emits the exact 256 Solidity proof bytes of the pinned SDK oracle. A separate native reduced Tate [pairing verifier](docs/BN254_PAIRING_STATUS.md) accepts that public proof and rejects changes to each public signal. A [compiled Classic key](docs/CLASSIC_KEY_SCOPE.md) contains all verifier points from immutable source, without runtime JSON key substitution. The connected experimental prover uses variable-time arithmetic and retains secret intermediates in process memory. See [MSM scope](docs/GROTH16_MSM_SCOPE.md).
 - A [Groth16 blinding sampler](docs/PROOF_BLINDING_SCOPE.md) uses separate kernel CSPRNG reads and bounded rejection sampling for nonzero canonical Fr values. Deterministic SDK comparison fixtures use fixed test blinding; the connected worker samples fresh values. Production secret safety and deployed pool/verifier binding are still open.
 - An internal [one-note withdrawal builder](docs/WITHDRAW_PROOF_SCOPE.md) composes a protected selected note, bounded pool history, exact-block root/leaf/spent checks, authenticated proving assets, fresh blinding, a complete native Classic proof, and direct/paymaster/relayer calldata binding. One unfunded public fixture matched the pinned SDK proof bytes and direct calldata in about 194 seconds. Runnable experimental commands use the separate worker/session path instead of importing note secrets into this parent-side builder.
@@ -80,7 +90,33 @@ With Node 22.18 or newer, `node scripts/verify.mjs` builds the project, rejects 
 
 ## Meaning of the proofs
 
-The [proof scope](docs/PROOF_SCOPE.md) names each native theorem and its limits. Theorems cover exact catalog facts, selected transaction/receipt/ABI guards, rejection of failed simulation, relayer fee conservation, reservation and send ordering, and event-to-policy confirmation requirements. The sponsored withdrawal runner dispatches through its proved command machine, the worker runs a restricted effect program with a typed release gate, and the sampler shares its bounded loop with a finite distribution model. Read-only parity is bounded to 156 catalog/planner/version cases plus six note-file cases; connected money-moving routes have focused offline vectors and injected fault tests. These are not end-to-end proofs of all commands. Theorems do not prove the cryptographic algorithms correct, the TypeScript CLI equivalent on all inputs, the C/OS boundary, physical filesystem durability, RPC truth, Groth16 security, or deployed-contract behavior. Compatibility vectors are tests, not cryptographic security proofs.
+The [proof scope](docs/PROOF_SCOPE.md) distinguishes acceptance rules,
+construction results, mathematical representation and finite tests. The
+sponsored runner uses its proved command machine, and the worker uses a
+restricted effect program with a typed release gate. A successful Classic
+pipeline result now carries exact provenance from the original assets,
+withdrawal input and supplied blinding through witness generation, H, point
+assembly and serialization. This proves which native computations produced
+a returned result; it does not prove that every valid input succeeds.
+
+The mathematical workspace proves selected field/G1 operations, the actual
+windowed G1 MSM's original-input weighted sum and normalization, and the actual
+eight-limb Solidity byte codec. It also transfers the shared byte sampler's
+arbitrary event counts to the BN254 scalar field. Compatible ideal witness
+offsets have equal full-field-mask observation counts and an explicit
+nonzero-mask event bound, with retry failure retained. The full worker's
+released bytes and additional failures are not yet proved to factor through
+that ideal observation. No implementation zero-knowledge claim follows.
+
+Read-only parity remains bounded to the documented catalog/planner/version
+and note-file cases. Complete witness-gadget correspondence, general FFT/H/QAP,
+group/subgroup order, G2 MSM/group and
+pairing correctness, complete command refinement, cryptographic security,
+C/OS behavior, physical durability, RPC truth and deployed-contract behavior
+remain outside the established results. Compatibility vectors are finite
+tests, not cryptographic security proofs. [Build provenance](docs/BUILD_PROVENANCE.md)
+checks byte identity against an independently trusted manifest; it does not
+authenticate that manifest or pin the worker used at runtime.
 
 The fund-safety specification is: sign only the exact reviewed recipient, pool, amount, fee and ordered actions; preserve a claim before exposing anything executable; never create a duplicate or replacement while an outcome is uncertain; and report success only from matching transaction and event evidence. Native Lean provides definitions and proof-carrying validators for these rules, and selected policy/replay theorems establish parts of them. There is no complete proof that every effectful command follows those rules across actual files, processes and network failures.
 

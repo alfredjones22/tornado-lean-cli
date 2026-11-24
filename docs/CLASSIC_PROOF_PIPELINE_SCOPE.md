@@ -30,7 +30,12 @@ the six reviewed public values. Its certificate is a proposition, erased from
 compiled output. It existentially records a `CheckedArtifact` whose private
 constructor carries kernel-visible equalities for the checked witness,
 serialized bytes, derived verifier points, successful compiled-key pairing
-equation, and public signals. Eight Lean theorems expose these gates. Their
+equation, and public signals. `prove_success_from_original` and
+`prove_success_assembled_and_serialized` additionally bind public success to
+the original assets, withdrawal input and supplied `r,s`, through the actual
+input prefix, witness generator, key decoder, H calculation, point assembly
+and exact returned bytes. This is execution provenance, not a claim that every
+valid input succeeds or that the computed H satisfies a QAP identity. Their
 axiom reports contain only Lean's standard `propext`, `Classical.choice`, and
 `Quot.sound`. Neither the input note nor the checked witness is a runtime field
 of the public result. The computation still holds secret intermediates in
@@ -55,11 +60,15 @@ PASS: authenticated compressed assets, complete public witness, 256-byte SDK pro
 
 ## Trust and production limits
 
-- The Lean theorems prove properties of the executable Lean gates and carried
-  equalities. They do not prove SHA-256, DEFLATE, Circom translation, BN254
-  group laws, FFT, Groth16 arithmetic or soundness, or reduced-Tate versus
-  EIP-197 optimal-Ate equivalence for all inputs. The full fixture is one
-  finite compatibility case.
+- The separate [mathematical workspace](../proofs/README.md) proves native
+  field, G1 group/scalar/windowed-MSM, normalization and fixed-limb codec
+  properties. Successful G1 MSM results are exact weighted sums of the original
+  decoded points and canonical scalars. General FFT/H/QAP, G2 MSM/group,
+  pairing and complete Groth16 algebraic correctness remain open, as do
+  SHA-256 and DEFLATE correctness/security, complete witness-gadget/Circom
+  correspondence and
+  reduced-Tate versus EIP-197 optimal-Ate equivalence. The full fixture is one
+  finite compatibility case; see [proof scope](PROOF_SCOPE.md).
 - The native `Nat`/big-integer, elliptic-curve, FFT, and pairing operations are
   variable-time and do not zeroize secret material. The API accepts explicit
   `r,s`; it does not securely sample fresh blinding scalars. Fixed fixture

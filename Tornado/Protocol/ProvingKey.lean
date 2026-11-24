@@ -1,3 +1,4 @@
+import LeanCrypto.Groth16.Types
 import Lean
 import Tornado.Crypto.SHA256
 import Tornado.Protocol.BN254G2
@@ -54,24 +55,9 @@ def readMontgomeryFp (bytes : ByteArray) (offset : Nat) : Except String Nat :=
 def readMontgomeryFr (bytes : ByteArray) (offset : Nat) : Except String Nat :=
   readMontgomery bytes offset scalarPrime frRInverse
 
-structure AffineG1 where
-  x : Nat
-  y : Nat
-  deriving Inhabited, Repr, BEq
-
-inductive DecodedG1 where
-  | identity
-  | point (value : AffineG1)
-  deriving Inhabited, Repr, BEq
-
-def AffineG1.onCurve (point : AffineG1) : Bool :=
-  point.x < fpPrime && point.y < fpPrime &&
-  point.y * point.y % fpPrime ==
-    ((point.x * point.x % fpPrime) * point.x + 3) % fpPrime
-
-def DecodedG1.valid : DecodedG1 → Bool
-  | .identity => true
-  | .point p => p.onCurve
+export LeanCrypto.Groth16.Types
+  (AffineG1 AffineG1.mk AffineG1.x AffineG1.y AffineG1.onCurve
+   DecodedG1 DecodedG1.identity DecodedG1.point DecodedG1.valid)
 
 /-- Decode the SDK's affine G1 format. The old `(0,1)` sentinel means the
     group identity; every other decoded point must satisfy y² = x³ + 3. -/
@@ -84,9 +70,7 @@ def readG1 (bytes : ByteArray) (offset : Nat) : Except String DecodedG1 := do
   if !point.onCurve then throw "Proving-key G1 point is not on BN254."
   return .point point
 
-inductive DecodedG2 where
-  | identity
-  | point (value : Tornado.Protocol.BN254G2.Affine)
+export LeanCrypto.Groth16.Types (DecodedG2 DecodedG2.identity DecodedG2.point)
 
 /-- Decode the SDK's four Fp limbs in `(c0,c1)` order for each Fp2
     coordinate. The old `((0,0),(1,0))` sentinel means the group identity.
@@ -119,14 +103,9 @@ def readG2Section (bytes : ByteArray) (start stop count : Nat) :
     points := points.push (← readG2 bytes (start + i * 128))
   return points
 
-structure PolynomialEntry where
-  constraint : Nat
-  coefficient : Nat
-  deriving Inhabited, Repr, BEq
-
-structure Polynomial where
-  entries : Array PolynomialEntry
-  deriving Inhabited, Repr
+export LeanCrypto.Groth16.Types
+  (PolynomialEntry PolynomialEntry.mk PolynomialEntry.constraint PolynomialEntry.coefficient
+   Polynomial Polynomial.mk Polynomial.entries)
 
 /-- Decode one SDK sparse-polynomial record. Each signal starts with a u32
     count, followed by (u32 constraint index, Montgomery Fr coefficient)

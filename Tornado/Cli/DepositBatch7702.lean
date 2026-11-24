@@ -1,5 +1,7 @@
+import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.DepositMultiSend
 import Tornado.Runtime.Bundler
+import Tornado.Protocol.DepositCallsIntent
 
 /-! Simple7702 batched deposits with protected owner signing. Signed
 delegation can be executable before an operation is submitted, so the journal
@@ -107,16 +109,43 @@ private def readingsWith (effects : Effects) (items : Array Item)
     pools := pools.push ⟨pool, denomination, allowance⟩
   return ⟨actualChain, code, balance, tokenBalance, pools⟩
 
-def callsData (steps : Array Tornado.Cli.DepositSend.Step) : Except String ByteArray := do
+private def callsDataCandidate (steps : Array Tornado.Cli.DepositSend.Step) : Except String ByteArray := do
   -- At most five ERC-20 deposits, each with reset+approve, or twelve ETH
   -- deposits. These internal calls are distinct from the twelve user calls
   -- allowed by the public action importer.
   if steps.isEmpty || steps.size > 15 then throw "Invalid batched deposit call count."
   let calls := steps.map (fun step => (⟨step.to, step.value, step.data⟩ : Abi.ContractCall))
-  if calls.size == 1 then
+  let data ← if calls.size == 1 then
     let call := calls[0]!
     Abi.accountExecute call.to call.value call.data
   else Abi.accountExecuteBatchComposed calls
+  return data
+
+def prepareCalls (steps : Array Tornado.Cli.DepositSend.Step) :
+    Except String (Σ bytes, DepositCallsIntent.Checked
+      (steps.map Tornado.Cli.DepositSend.stepEncoding) bytes) := do
+  let data ← callsDataCandidate steps
+  let checked ← DepositCallsIntent.accept (steps.map Tornado.Cli.DepositSend.stepEncoding) data
+  return ⟨data, checked⟩
+
+def callsData (steps : Array Tornado.Cli.DepositSend.Step) : Except String ByteArray :=
+  (prepareCalls steps).map (·.1)
+
+theorem callsData_success_decodes (steps : Array Tornado.Cli.DepositSend.Step)
+    (bytes : ByteArray) (success : callsData steps = .ok bytes) :
+    ∃ calls meaning, DepositCallsIntent.decode bytes = .ok calls ∧
+      calls.size = steps.size ∧
+      DepositIntent.decodeSteps (steps.map Tornado.Cli.DepositSend.stepEncoding) = .ok meaning ∧
+      DepositIntent.decodeSteps (DepositCallsIntent.projected
+        (steps.map Tornado.Cli.DepositSend.stepEncoding) calls) = .ok meaning := by
+  unfold callsData at success
+  cases result : prepareCalls steps with
+  | error error => simp [result, Except.map] at success
+  | ok prepared =>
+    have same : prepared.1 = bytes := by simpa [result, Except.map] using success
+    subst bytes
+    simpa using DepositCallsIntent.checked_decoded_steps
+      (steps.map Tornado.Cli.DepositSend.stepEncoding) prepared.1 prepared.2
 
 private def nonce (effects : Effects) (sender : Nat) (tag : String) : IO Nat := do
   rpcQuantity (← effects.rpc .getTransactionCount
@@ -299,6 +328,8 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
         throw <| IO.userError "Owner nonce changed after batch review."
     let signature ← checkedSignature effects sender hash
     let finalOperation := { operation with signature := signature }
+    let _ ← checked <| DepositCallsIntent.acceptOperation
+      (steps.map Tornado.Cli.DepositSend.stepEncoding) finalOperation
     let bundlerEffects : Bundler.Effects := {
       rpc := effects.bundler,
       reserve := fun known _ => update index [
@@ -347,7 +378,7 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
   let lockBytes := ((Json.mkObj [("version", toJson (1 : Nat)),
     ("kind", toJson ("sender-lock" : String)), ("sender", toJson senderText),
     ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-  ProtectedIO.createPrivate lockPath lockBytes
+  WithdrawalJournalProgram.createProtected lockPath lockBytes
   let created ← IO.mkRef (#[] : Array (String × ByteArray))
   try
     for item in items do
@@ -359,7 +390,7 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
         ("chainId", toJson (chainNumber chain)), ("pool", toJson item.pool.address),
         ("commitment", toJson (hex item.commitment)),
         ("sender", toJson senderText), ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-      ProtectedIO.createPrivate claimPath content
+      WithdrawalJournalProgram.createProtected claimPath content
       created.modify (·.push (claimPath, content))
   catch error =>
     for (path, content) in (← created.get) do
@@ -374,8 +405,8 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
   let effects : Effects := {
     rpc := fetch rpcUrl, bundler := fetch bundlerUrl,
     signDigest := NativeSigner.signDigest65FromProtectedFile keyPath,
-    createJournal := ProtectedIO.createPrivate journalPath,
-    replaceJournal := ProtectedIO.replacePrivate journalPath,
+    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
     waitFinality := ProtectedTxSender.waitReceiptDepth rpcUrl,
     approveDelegation := fun review => do
       IO.println review
@@ -414,3 +445,5 @@ def experimentalAutoSend (notesFile keyFile rpcUrl bundlerUrl journalPath : Stri
     experimentalSend notesFile keyFile rpcUrl bundlerUrl journalPath chain customBundler yes
 
 end Tornado.Cli.DepositBatch7702
+
+#print axioms Tornado.Cli.DepositBatch7702.callsData_success_decodes

@@ -1,3 +1,4 @@
+import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.SmartAccountRecover
 import Tornado.Cli.SmartAccountStatus
 import Tornado.Runtime.ProtectedTxSender
@@ -249,7 +250,7 @@ def recoverCommand (args : List String) : IO String := do
     ("sender", toJson senderText), ("journal", toJson journalPath),
     ("purpose", toJson ("smart-account-recovery" : String))]).compress ++ "\n").toUTF8
   let hash ← try
-    withSenderLock (ProtectedIO.createPrivate senderLock lockBytes)
+    withSenderLock (WithdrawalJournalProgram.createProtected senderLock lockBytes)
       (ProtectedIO.removePrivateExact senderLock lockBytes) fun signingStarted => do
       let effects : Effects := {
         rpc := HttpTransport.call rpc
@@ -265,8 +266,8 @@ def recoverCommand (args : List String) : IO String := do
           let answer ← (← IO.getStdin).getLine
           if jsTrim answer != "RECOVER" then fail "Recovery cancelled before signing."
         rereview := SmartAccountRecover.inspectWith chain owner recipient read
-        createJournal := ProtectedIO.createPrivate journalPath
-        replaceJournal := ProtectedIO.replacePrivate journalPath
+        createJournal := WithdrawalJournalProgram.createProtected journalPath
+        replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath
         waitFinality := ProtectedTxSender.waitReceiptDepth rpc }
       executeWith effects review
     catch _ =>

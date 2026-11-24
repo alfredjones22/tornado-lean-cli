@@ -441,9 +441,9 @@ def executeFeistel (constants : Array Nat) (state : Assignment)
       result ← result.write stage.rightOutput ((right + fifth) % scalarPrime)
   return result
 
-def executeMerkleLevel (constants : Array Nat) (state : Assignment)
-    (level : MerkleLevel) (sponge : SpongeLevel) :
-    Except String Assignment := do
+/-- Execute the exact Circom DualMux read/bit-check/two-write stage. -/
+def executeDualMux (state : Assignment) (level : MerkleLevel) :
+    Except String (Assignment × Nat × Nat) := do
   let leftInput ← state.read level.leftInput
   let rightInput ← state.read level.rightInput
   let selector ← state.read level.selector
@@ -451,6 +451,12 @@ def executeMerkleLevel (constants : Array Nat) (state : Assignment)
   let (left, right) := dualMuxValues selector leftInput rightInput
   let withLeft ← state.write level.leftOutput left
   let withRight ← withLeft.write level.rightOutput right
+  return (withRight, left, right)
+
+def executeMerkleLevel (constants : Array Nat) (state : Assignment)
+    (level : MerkleLevel) (sponge : SpongeLevel) :
+    Except String Assignment := do
+  let (withRight, left, right) ← executeDualMux state level
   let mut firstInputs := withRight
   firstInputs ← firstInputs.write sponge.first.key 0
   firstInputs ← firstInputs.write sponge.first.leftInput left

@@ -19,20 +19,36 @@ independently using the pinned noble BN254 package. The
 [`Groth16MSM.lean` test](../tests/Groth16MSM.lean) checks those values and thirteen
 rejection cases. The extractor's `--check` mode reproduces the fixture.
 
+The [mathematical workspace](../proofs/README.md) additionally proves the actual
+private bucket-fill, bucket-collapse and Horner/window algorithm and transports
+it to the native G1 group representation. For every successful public `msmG1`
+call, `msmG1_success_sum` retains the original ordered point decoding, equal
+counts and canonical original scalars, and proves the result is their exact
+mathematical weighted sum. `msmG1_success_normalized_sum` constructs the actual
+optional affine normalization of the same sum. It does not assume a final
+normalization or proof-verifier success. These G1 results do not prove G2
+MSM/group semantics, G1 subgroup order or the complete Groth16 assembly relation.
+
 `solidityProofBytes` normalizes the three proof points, rejects infinity,
 and emits the Classic verifier's exact 256-byte order: A x/y; B x.c1/x.c0,
 y.c1/y.c0; C x/y. A pinned SDK-shaped synthetic proof vector checks every
-output byte and three of the rejection cases.
+output byte and three of the rejection cases. `ProofCodec` also proves the
+actual private word loop's fixed-width construction, 256-byte length and
+recovery of all eight ordered limbs. `NormalizedProofCodec` discharges finite
+G1 A/C normalization from curve conditions; G2 affine normalization remains
+an explicit premise. These are not verifier-parser or pairing theorems.
 
 `deriveCheckedProofPoints` is the pure authenticated-artifact route: it takes
 the private-constructor pinned graph, circuit, and key types, generates and
 checks the full native witness, parses the authenticated full key, computes H
 with the native NQR-7 FFT, and assembles proof points from explicit `r` and
 `s` blinding values. Its return type carries a kernel-visible proof that the
-same returned witness passed all 28,275 native R1CS equations. Two other
-kernel-checked theorems prove that each MSM rejects a point/scalar count
-mismatch. These theorems use only Lean's standard axioms; they do **not** prove
-the elliptic-curve formulas, FFT, or Groth16 protocol soundness.
+same returned witness passed all 28,275 native R1CS equations. Original-input provenance theorems trace a successful result through that
+same witness generator, decoded key, H calculation and actual assembly.
+The G1 field/group/scalar/windowed-MSM and byte-codec results are established
+separately. General FFT/H/QAP, G2 MSM/group, pairing and the full Groth16
+algebraic relation remain unproved. See [proof scope](PROOF_SCOPE.md) for the
+precise distinctions and imported-dependency trust boundary.
 
 The compiled full 28,300-signal public test in
 [`Groth16MSMFull.lean`](../tests/Groth16MSMFull.lean) authenticates the pinned

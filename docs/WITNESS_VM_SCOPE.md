@@ -51,14 +51,19 @@ components do not authenticate Ethereum consensus state.
 
 ## Proof and trust limits
 
-Five kernel-checked theorems prove that the native bit extractor produces a
-binary value, that the two permitted selector values place their inputs in
-the specified order, and that every witness accepted by the final native API
-passed the complete R1CS checker. The exhaustive R1CS checks are runtime
-checks, not a Lean theorem that all circuit inputs produce correct witnesses.
-The graph extractor and manual translations of Circom's point/mux arithmetic
-remain correspondence assumptions, tested on four public inputs including
-the synthetic rightmost path.
+The guard theorems show that every witness accepted by the final native API
+passed the complete R1CS checker. `Spec/WitnessGadgets.lean` additionally
+constructs the actual Num2Bits248 and DualMux assignments from independently
+supplied original inputs, slot bounds and compatible aliases. It proves the
+stored boolean/reconstruction/mux equations and assignment preservation, with
+no final-R1CS-success premise. The extracted selector refactor is proved equal
+to the entire original Merkle-level implementation, including errors.
+
+This does not prove every other instantiated template, all original constraint
+rows or global witness construction for every valid input. Other graph/primitive
+correspondence remains tested rather than fully proved. The separate BN254
+G1/MSM results do not prove the BabyJub/Pedersen or MiMC witness gadgets. See
+[proof scope](PROOF_SCOPE.md) and the [mathematical workspace](../proofs/README.md).
 The pinned circuit itself, proving key, deployed verifier, and consensus chain
 are external trust boundaries. A satisfying witness does **not** produce a
 Groth16 proof, establish that a note is unspent, or validate the pool root.

@@ -1,4 +1,5 @@
 import Tornado.Spec.BlindingBounds
+import Tornado.Runtime.ProofBlinding
 
 /-! Exhaustive finite reference checks and negative controls. All candidate
 values are public synthetic integers; no entropy source or network is used. -/

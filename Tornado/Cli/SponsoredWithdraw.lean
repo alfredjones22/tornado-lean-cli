@@ -6,6 +6,7 @@ import Tornado.Cli.WithdrawBatch
 import Tornado.Cli.RelayerWithdraw
 import Tornado.Runtime.ProofBlinding
 import Tornado.Runtime.ProtectedTxSender
+import Tornado.Runtime.ReservationAdmission
 
 /-! Explicitly experimental runnable withdrawals. The parent opens no note
 backup: metadata, witnesses, proofs and note-derived signatures are produced
@@ -205,9 +206,7 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
   let metadata ← if batch then ProverWorkerClient.inspectBatchPrototype worker noteFile chainId
     else pure #[← ProverWorkerClient.inspectPrototype worker noteFile chainId options.noteIndex]
   let paths ← metadata.mapM (RelayerWithdraw.statusPath options.statusDir)
-  for path in paths do
-    if ← (System.FilePath.mk path).pathExists then
-      fail s!"A selected note already has an attempt at {path}. Reconcile it before preparing another withdrawal."
+  let _ ← ReservationAdmission.requireUnclaimed paths
   let client ← WithdrawalNetwork.native {
     chainId, rpcUrl := rpc, bundlerUrl := bundler, customBundler,
     simulationRpcUrl := options.simulationRpc, simulationPolicy := options.simulationPolicy }
@@ -289,7 +288,7 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
       let bytes := (Json.mkObj [("version", toJson (1 : Nat)),
         ("kind", toJson ("sender-lock" : String)), ("statusFile", toJson paths[0]!),
         ("purpose", toJson ("smart-account-withdrawal" : String))]).compress.toUTF8
-      ProtectedIO.createPrivate path bytes
+      WithdrawalJournalProgram.createProtected path bytes
       pure (some (path, bytes))
     else pure none
   try

@@ -1,4 +1,5 @@
 import Lean
+import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.SmartAccountShow
 import Tornado.Domain.Catalog
 import Tornado.Domain.NoteIdentity
@@ -437,6 +438,62 @@ private def syncMarker (root : Json) (phase : String) : Json :=
       |>.bind (·[0]?) |>.getD Json.null),
     ("releaseReservations", toJson false)])
 
+/-- The normalized identity retains complete signed payloads, ordered note
+reservations and unknown extension fields; only documented outcome fields are
+removed by `reservation`. -/
+def reservationString (root : Json) : Except String String :=
+  (reservation root).map Json.compress
+
+def reservationBytes (bytes : ByteArray) : Except String String := do
+  reservationString (← decodeBytes bytes)
+
+structure RepairPlan (baseline : Json) where
+  private mk ::
+  staged : ByteArray
+  complete : ByteArray
+  identity : String
+  original : reservationString baseline = .ok identity
+  stagedIdentity : reservationBytes staged = .ok identity
+  completeIdentity : reservationBytes complete = .ok identity
+
+/-- Certify both exact bytestrings before dispatching any repair write. -/
+def prepareRepair (baseline updated : Json) : Except String (RepairPlan baseline) :=
+  match original : reservationString baseline with
+  | .error message => .error message
+  | .ok identity => Id.run do
+    let staged := ((syncMarker updated "in-progress").compress ++ "\n").toUTF8
+    let complete := ((syncMarker updated "complete").compress ++ "\n").toUTF8
+    return match hs : reservationBytes staged with
+      | .error message => .error message
+      | .ok stagedValue =>
+        if sameStage : stagedValue = identity then
+          match hc : reservationBytes complete with
+          | .error message => .error message
+          | .ok completeValue =>
+            if sameComplete : completeValue = identity then
+              .ok ⟨staged, complete, identity, original,
+                sameStage ▸ hs, sameComplete ▸ hc⟩
+            else .error "Completed repair changed a withdrawal reservation."
+        else .error "Staged repair changed a withdrawal reservation."
+
+def replacementProgram (snapshots : Array (String × ByteArray)) (bytes : ByteArray) :
+    WithdrawalJournalProgram.Program :=
+  snapshots.toList.map (fun (path, old) => .replace path old bytes)
+
+theorem repair_preserves_reservation (baseline : Json) (plan : RepairPlan baseline) :
+    ∃ identity, reservationString baseline = .ok identity ∧
+      reservationBytes plan.staged = .ok identity ∧
+      reservationBytes plan.complete = .ok identity :=
+  ⟨plan.identity, plan.original, plan.stagedIdentity, plan.completeIdentity⟩
+
+theorem repair_commands_preserve_reservation (baseline : Json) (plan : RepairPlan baseline)
+    (snapshots : Array (String × ByteArray)) (command : WithdrawalJournalProgram.Command)
+    (member : command ∈ replacementProgram snapshots plan.staged) :
+    ∃ path old, command = .replace path old plan.staged ∧
+      reservationBytes plan.staged = .ok plan.identity := by
+  obtain ⟨⟨path, old⟩, _, exactCommand⟩ := List.mem_map.mp member
+  exact ⟨path, old, exactCommand.symm, plan.stagedIdentity⟩
+
 structure PersistenceResult where
   observation : Observation
   complete : Bool
@@ -456,23 +513,23 @@ def reconcileAndPersistWith (selectedPath : String) (store : Store)
   let baseline ← fromExcept (mergedBaseline mirrors)
   let observation ← reconcileWith baseline.compress fetchChain fetchBundler
   let updated ← fromExcept (observedJson baseline observation)
-  let staged := ((syncMarker updated "in-progress").compress ++ "\n").toUTF8
-  let complete := ((syncMarker updated "complete").compress ++ "\n").toUTF8
-  if staged.size > 1024 * 1024 || complete.size > 1024 * 1024 then
-    throw <| IO.userError invalid
-  let mut acknowledged := 0
-  for mirror in mirrors do
-    try
-      store.replace mirror.path mirror.bytes staged
-      acknowledged := acknowledged + 1
-    catch _ =>
-      return ⟨observation, false, acknowledged, mirrors.size,
-        s!"Batch journal synchronization is incomplete ({acknowledged}/{mirrors.size} mirror writes acknowledged). A write may have completed before its error. Keep every reservation and signed hash; inspect all listed files and rerun status. Do not prepare a replacement withdrawal."⟩
-  try
-    store.replace mirrors[0]!.path staged complete
+  let plan ← fromExcept (prepareRepair baseline updated)
+  let commands := replacementProgram (mirrors.map (fun mirror => (mirror.path, mirror.bytes))) plan.staged
+  let effects : WithdrawalJournalProgram.Effects := {
+    createPrivate := fun _ _ => throw <| IO.userError "Unexpected create during status repair."
+    replacePrivate := store.replace }
+  let stagedReport ← WithdrawalJournalProgram.runIO effects commands
+  let acknowledged := stagedReport.completedCommands.length
+  if !stagedReport.allSucceeded then
+    return ⟨observation, false, acknowledged, mirrors.size,
+      s!"Batch journal synchronization is incomplete ({acknowledged}/{mirrors.size} mirror writes acknowledged). A write may have completed before its error. Keep every reservation and signed hash; inspect all listed files and rerun status. Do not prepare a replacement withdrawal."⟩
+  let _ ← WithdrawalJournalProgram.requireSuccess stagedReport
+  let finalReport ← WithdrawalJournalProgram.runIO effects
+    [.replace mirrors[0]!.path plan.staged plan.complete]
+  if finalReport.allSucceeded then
     return ⟨observation, true, acknowledged, mirrors.size,
       "Batch observation saved to every journal. All signed candidates and note reservations remain in place."⟩
-  catch _ =>
+  else
     return ⟨observation, false, acknowledged, mirrors.size,
       "All mirror writes were acknowledged, but the authoritative completion marker could not be committed. Keep every reservation and signed hash, inspect all listed files and rerun status before further action."⟩
 
@@ -548,3 +605,6 @@ def statusCommand (args : List String) : IO (String × UInt32) := do
     if result.complete && result.observation.status == .confirmed then 0 else 2)
 
 end Tornado.Cli.BatchWithdrawalStatus
+
+#print axioms Tornado.Cli.BatchWithdrawalStatus.repair_preserves_reservation
+#print axioms Tornado.Cli.BatchWithdrawalStatus.repair_commands_preserve_reservation

@@ -62,10 +62,20 @@ The tuple must re-encode to the exact complete input bytes. This is a
 field-level property, independent of hash collision resistance. It does not
 prove that the user's supplied address is the address they meant to enter.
 
-For batch post-withdrawal calls, payload preservation proves that signing
-does not alter the built operation. It is not a complete semantic proof of
-the batch builder or of arbitrary target contracts. A correctly preserved,
-user-approved call can still spend assets or grant permissions.
+For batches, [`BatchWithdrawalIntent`](../Tornado/Protocol/BatchWithdrawalIntent.lean)
+independently decodes the complete account, sponsor and factory payloads.
+The actual public builder's `batch_success_decodes` theorem binds those
+decoded fields to original note requests, catalog denominations, account,
+owner, gas policy and ordered user calls. The generated withdrawal prefix
+contains all nonsponsoring notes in order with zero fee/refund; its only
+suffix is the exact reviewed calls or the selected ETH/ERC-20 net forwarding.
+User-approved tail calls can themselves interact with arbitrary contracts.
+
+[`ReviewBatchIntent`](../Tornado/Spec/ReviewBatchIntent.lean) connects this
+builder theorem to the prepared review used by the runnable driver. Signing
+preserves that operation structurally. These are encoded-intent properties,
+not correctness of arbitrary target contracts: a preserved, approved call
+can still spend assets or grant permissions.
 
 The runner proof covers sponsored 4337 withdrawals. Relayer, deposit,
 recovery, status reconciliation and the batch call builder have their own
@@ -125,17 +135,28 @@ Zero and candidates at or above the scalar-field order are rejected rather
 than reduced modulo the order. Each scalar has at most 512 attempts; the
 second scalar starts with fresh draws after the first succeeds.
 
-The distribution results are conditional on independent uniform decoded
-256-bit candidates independent of the note/witness. They concern the sampler, including its exhaustion
+[`ByteEntropy`](../Tornado/Spec/ByteEntropy.lean) proves that the actual 32-byte
+decoder is a bijection and transfers byte-product counts to every event of
+the existing shared sampler model. The distribution results are conditional
+on independent uniform 32-byte inputs independent of the note/witness.
+They concern the sampler, including its exhaustion
 outcome, rather than assuming successful sampling or assigning a uniform
 distribution to its result. The OS entropy source is an assumption, not a
 Lean axiom or a proved property of the host. See
 [`PROOF_BLINDING_SCOPE.md`](PROOF_BLINDING_SCOPE.md) for precise statements.
 
-Correct blinding is a necessary building block for proof privacy. It does
-not establish that the implemented Groth16 algorithm is zero knowledge,
-that later prover failures are independent of the witness or randomness,
-or that timing and memory behavior are safe.
+The mathematical `SamplerField` bridge also proves the actual canonical
+scalar-to-field bijection and arbitrary-event pushforward, including the
+common retry-failure mass. For compatible ideal witness offsets under one
+public setup, full-field mask observations have exact equal counts; nonzero
+mask observations satisfy the explicit `4q/(q−1)²` event bound. The bounded
+statement includes failure and does not condition it away.
+
+These observations are functions of the ideal field triple. The complete
+worker's native proof construction, additional failures and released output
+are not proved to factor through it. Correct blinding therefore does not yet
+establish implementation zero knowledge, secret-independent failures or safe
+timing, resources and memory behavior.
 
 ## External API and privacy assumptions
 
@@ -167,13 +188,27 @@ that execution risk, not provider anonymity.
 
 ## Completeness and zero knowledge
 
-The full-size public fixtures demonstrate that native witness and proof
-generation can produce proofs accepted by the native compiled-key verifier,
-and compare deterministic proof bytes with the pinned SDK. Returned proof
-objects carry evidence of the executable witness, serialization and verifier
-checks. This is stronger than compiling without type errors, but it is not
-a universal completeness theorem for all valid notes and paths, nor proof
-of equivalence to deployed Ethereum verification.
+The full-size public fixtures demonstrate native proof generation accepted
+by the native compiled-key verifier and deterministic byte agreement with
+the pinned SDK. A successful Classic pipeline result now carries exact
+provenance from its original assets, withdrawal input and supplied blinding,
+through input-prefix construction, the actual witness generator, key decoding,
+H, point assembly, serialization and reviewed public signals. This proves what
+produced a returned result, not that every independently valid input succeeds.
+
+The proof-only workspace separately certifies the actual field primes and
+native field/inverse operations, exact-order admitted FFT roots, butterfly
+and two-point transform semantics, G1 add/double correspondence to Mathlib's
+elliptic-curve group, constructive G1 normalization, and the actual eight-limb
+Solidity codec. The codec still requires G2 affine normalization output.
+Only Num2Bits248 and DualMux have constructive original-input gadget results;
+other witness gadgets and global circuit construction remain unproved.
+The actual scalar loop maps to `(n % q) • P`, and to `n • P` for canonical
+scalars; this does not establish group/subgroup order. General FFT/H/QAP,
+G2 MSM/group and pairing correspondence remain open. The actual G1 windowed
+MSM now has original-input weighted-sum and normalization theorems; this does
+not establish the complete Groth16 point-assembly relation. These partial results do not prove universal
+Groth16 completeness or equivalence to deployed Ethereum verification.
 
 There is no end-to-end zero-knowledge theorem for this prover implementation.
 Sampler distribution and worker confinement are narrower, reviewable pieces
@@ -182,8 +217,10 @@ and nonzeroizing. No funded transaction is part of the verification gate.
 
 To review the specification, compare these rules with the linked definitions
 and theorem statements, then inspect the explicit assumptions. Run
-`lake build Tornado` for kernel checking and `node scripts/verify.mjs` with
-Node 22.18 or newer for the broader offline gate. Its report inventories
+`node scripts/verify.mjs --kernel-only` for all workspace builds and axiom
+checks, or `node scripts/verify.mjs` with Node 22.18 or newer for the broader
+offline gate. `lake build Tornado` alone does not check the separate Mathlib
+workspace; see [verification setup](VERIFICATION.md). Its report inventories
 theorems, allowed standard axioms, exact input hashes and test coverage;
 `PASS_WITH_LIMITATIONS` means those checks passed, not that the entire CLI is
 certified safe.

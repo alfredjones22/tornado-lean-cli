@@ -67,9 +67,10 @@ def checkedKey : Except String Tornado.Protocol.BN254Groth16Verify.VerifyingKey 
     point prevents verification rather than silently wrapping modulo Fp. -/
 def verifyClassic (proof : Tornado.Protocol.BN254Groth16Verify.Proof)
     (signals : Array Nat) : Except String Bool :=
-  match checkedKey with
-  | .error message => .error message
-  | .ok key => Tornado.Protocol.BN254Groth16Verify.verify key proof signals
+  if signals.size != 6 then .error "Classic verifier requires exactly six public signals."
+  else match checkedKey with
+    | .error message => .error message
+    | .ok key => Tornado.Protocol.BN254Groth16Verify.verify key proof signals
 
 /-- An accepted result necessarily used the statically checked key; the
     caller cannot replace it through this API. -/
@@ -78,10 +79,17 @@ theorem verifyClassic_true_uses_checked_key
     (signals : Array Nat) (h : verifyClassic proof signals = .ok true) :
     ∃ key, checkedKey = .ok key ∧
       Tornado.Protocol.BN254Groth16Verify.verify key proof signals = .ok true := by
-  cases hk : checkedKey with
-  | error _ => simp [verifyClassic, hk] at h
-  | ok key =>
-      exact ⟨key, rfl, by simpa [verifyClassic, hk] using h⟩
+  by_cases six : signals.size = 6
+  · cases hk : checkedKey with
+    | error _ => simp [verifyClassic, six, hk] at h
+    | ok key => exact ⟨key, rfl, by simpa [verifyClassic, six, hk] using h⟩
+  · simp [verifyClassic, six] at h
+
+theorem verifyClassic_rejects_wrong_dimensions
+    (proof : Tornado.Protocol.BN254Groth16Verify.Proof) (signals : Array Nat)
+    (wrong : signals.size ≠ 6) :
+    verifyClassic proof signals = .error "Classic verifier requires exactly six public signals." := by
+  simp [verifyClassic, wrong]
 
 /-- The pinned-key wrapper inherits the native verifier's canonical Fr
     public-signal gate. This is not a Groth16 soundness theorem. -/
@@ -92,7 +100,37 @@ theorem verifyClassic_true_signals_bounded
   obtain ⟨key, _, hv⟩ := verifyClassic_true_uses_checked_key proof signals h
   exact Tornado.Protocol.BN254Groth16Verify.verify_true_signals_bounded key proof signals hv
 
+/-- The exact compiled coordinates are accepted, and the decoded key has
+seven IC points. This is a closed kernel computation over public constants. -/
+theorem checkedKey_accepted_seven :
+    (checkedKey.toOption.map (fun key => key.ic.size)) = some 7 := by decide +kernel
+
+theorem checkedKey_success_seven (key : Tornado.Protocol.BN254Groth16Verify.VerifyingKey)
+    (accepted : checkedKey = .ok key) : key.ic.size = 7 := by
+  have checked := checkedKey_accepted_seven
+  simpa [accepted, Except.toOption] using checked
+
+/-- The Classic wrapper retains its exact circuit dimensions even though the
+standalone Groth16 verifier supports independently supplied dimensions. -/
+theorem verifyClassic_true_dimensions (proof : Tornado.Protocol.BN254Groth16Verify.Proof)
+    (signals : Array Nat) (accepted : verifyClassic proof signals = .ok true) :
+    signals.size = 6 ∧
+    ∃ key, checkedKey = .ok key ∧ key.ic.size = 7 ∧
+      Tornado.Protocol.BN254Groth16Verify.verify key proof signals = .ok true := by
+  have six : signals.size = 6 := by
+    by_cases correct : signals.size = 6
+    · exact correct
+    · simp [verifyClassic, correct] at accepted
+  obtain ⟨key, checked, verified⟩ := verifyClassic_true_uses_checked_key proof signals accepted
+  exact ⟨six, key, checked, checkedKey_success_seven key checked, verified⟩
+
 end Tornado.Protocol.ClassicVerifyingKey
 
 #print axioms Tornado.Protocol.ClassicVerifyingKey.verifyClassic_true_uses_checked_key
 #print axioms Tornado.Protocol.ClassicVerifyingKey.verifyClassic_true_signals_bounded
+
+#print axioms Tornado.Protocol.ClassicVerifyingKey.checkedKey_accepted_seven
+#print axioms Tornado.Protocol.ClassicVerifyingKey.checkedKey_success_seven
+#print axioms Tornado.Protocol.ClassicVerifyingKey.verifyClassic_true_dimensions
+
+#print axioms Tornado.Protocol.ClassicVerifyingKey.verifyClassic_rejects_wrong_dimensions

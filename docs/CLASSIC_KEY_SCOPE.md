@@ -18,9 +18,11 @@ coordinate to the pinned JSON fixture, confirms seven IC points, and checks
 noncanonical/missing-signal rejection. The resulting correspondence is finite
 test and source-review evidence, not a Lean theorem about an external file.
 
-Two kernel-checked Lean theorems constrain the native wrapper: any successful
+Kernel-checked Lean theorems constrain the native wrapper: any successful
 `verifyClassic` result used `checkedKey`, and any accepted proof had canonical
-Fr public signals. Neither theorem proves pairing arithmetic, Groth16
+Fr public signals. Dimension theorems additionally retain exactly six signals
+and seven IC points despite the generic verifier's broader interface.
+These theorems do not prove pairing arithmetic, Groth16
 soundness, circuit semantics, or that this source key matches a particular
 deployed pool's verifier. Deployed pool/verifier identity remains an external
 assumption for connected experimental withdrawals; authenticated deployed-code

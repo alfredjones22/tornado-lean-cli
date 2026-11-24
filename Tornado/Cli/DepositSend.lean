@@ -1,9 +1,11 @@
+import Tornado.Runtime.WithdrawalJournalProgram
 import Lean
 import Tornado.Domain.DepositBackup
 import Tornado.Protocol.Abi
 import Tornado.Protocol.RpcReceipt
 import Tornado.Protocol.TypedTransaction
 import Tornado.Protocol.TypedTransactionDecode
+import Tornado.Protocol.DepositIntent
 import Tornado.Runtime.HttpTransport
 import Tornado.Runtime.NativeSigner
 import Tornado.Runtime.ProtectedIO
@@ -44,6 +46,13 @@ structure Step where
   approvalAmount : Nat := 0
   deriving Inhabited
 
+/-- Copy the actual executable and journal fields without re-encoding data. -/
+def stepEncoding (step : Step) : DepositIntent.EncodedStep := {
+  kind := match step.kind with
+    | .reset => .reset | .approve => .approve | .deposit => .deposit
+  to := step.to, value := step.value, data := step.data, pool := step.pool,
+  commitment := step.commitment, spender := step.spender, approvalAmount := step.approvalAmount }
+
 structure Readings where
   chainId : Nat
   denomination : Nat
@@ -74,7 +83,7 @@ private def depositStep (pool : Pool) (commitment : ByteArray)
 
 /-- Pure invoice planner. All chain readings are supplied by the caller and
     must be independently obtained from the selected RPC before use. -/
-def planInvoice (invoice : PublicInvoice) (sender : Nat)
+private def planInvoiceCandidate (invoice : PublicInvoice) (sender : Nat)
     (readings : Readings) : Except String (Array Step) := do
   let pool := invoice.pool
   if sender == 0 || sender >= 2 ^ 160 ||
@@ -108,6 +117,62 @@ def planInvoice (invoice : PublicInvoice) (sender : Nat)
     throw "Deposit sender needs the selected ETH plus gas."
   steps := steps.push (← depositStep pool commitment poolAddress)
   return steps
+
+/-- An invoice payer receives only a public commitment and pool. This intent
+does not require or retain a spendable note or any note preimage. -/
+def invoiceIntent (invoice : PublicInvoice) (sender : Nat) (readings : Readings) :
+    Except String DepositIntent.Input := do
+  let pool ← addressNat invoice.pool.address
+  let token : Option Nat ← match invoice.pool.asset.token with
+    | none => pure none
+    | some text => some <$> addressNat text
+  let commitment ← parseHexBytes invoice.commitment
+  return {
+    items := #[{ pool, token, denomination := invoice.pool.amount, commitment := commitment.data }],
+    sender, chainId := chainNumber invoice.pool.chainId, actualChainId := readings.chainId,
+    senderHasCode := false, ethBalance := readings.ethBalance, tokenBalance := readings.tokenBalance,
+    pools := #[{ address := pool, denomination := readings.denomination, allowance := readings.allowance }],
+    forceSequential := true, limit := depositBatchLimit invoice.pool.asset }
+
+structure PreparedInvoice (invoice : PublicInvoice) (sender : Nat) (readings : Readings) where
+  private mk ::
+  steps : Array Step
+  input : DepositIntent.Input
+  original : invoiceIntent invoice sender readings = .ok input
+  checked : DepositIntent.CheckedSteps input (steps.map stepEncoding)
+
+def prepareInvoice (invoice : PublicInvoice) (sender : Nat) (readings : Readings) :
+    Except String (PreparedInvoice invoice sender readings) :=
+  match planInvoiceCandidate invoice sender readings with
+  | .error error => .error error
+  | .ok steps =>
+    match original : invoiceIntent invoice sender readings with
+    | .error error => .error error
+    | .ok input =>
+      match DepositIntent.acceptSteps input (steps.map stepEncoding) with
+      | .error error => .error error
+      | .ok checked => .ok ⟨steps, input, original, checked⟩
+
+/-- Actual public planning succeeds only with independently decoded deposit
+and approval fields equal to the original invoice and reading snapshot. -/
+def planInvoice (invoice : PublicInvoice) (sender : Nat)
+    (readings : Readings) : Except String (Array Step) :=
+  (prepareInvoice invoice sender readings).map (·.steps)
+
+theorem planInvoice_success_decodes (invoice : PublicInvoice) (sender : Nat) (readings : Readings)
+    (steps : Array Step) (built : planInvoice invoice sender readings = .ok steps) :
+    ∃ input meaning, invoiceIntent invoice sender readings = .ok input ∧
+      DepositIntent.expected input = .ok meaning ∧ meaning.mode = .sequential ∧
+      meaning.batches.size = 1 ∧
+      DepositIntent.decodeSteps (steps.map stepEncoding) = .ok meaning.batches[0]! ∧
+      DepositIntent.PlanPolicy input meaning := by
+  cases prepared : prepareInvoice invoice sender readings with
+  | error error => simp [planInvoice, prepared, Except.map] at built
+  | ok result =>
+    have same : result.steps = steps := by simpa [planInvoice, prepared, Except.map] using built
+    subst steps
+    exact ⟨result.input, result.checked.meaning, result.original, result.checked.original,
+      result.checked.sequential, result.checked.singleBatch, result.checked.decoded, result.checked.policy⟩
 
 private def fromExcept (result : Except String α) : IO α :=
   match result with
@@ -310,15 +375,37 @@ private def signedMatches (tx : Rlp.Transaction1559)
   if decoded.signature.isNone || !txMatches tx decoded.tx then
     throw "Signed transaction fields differ from the reviewed EIP-1559 call."
 
+/-- The actual invoice signer uses this gate before returning signed bytes
+for journaling. It keeps existing hash/serialization checks and additionally
+certifies the independently decoded executable deposit or approval step. -/
+def certifySignedStep (step : Step) (tx : Rlp.Transaction1559)
+    (signed : TypedTransaction.SignedTyped) :
+    Except String (DepositIntent.CheckedSignedStep (stepEncoding step) tx signed.serialized) := do
+  signedMatches tx signed
+  DepositIntent.acceptSignedStep (stepEncoding step) tx signed.serialized
+
+theorem certifySignedStep_success_decodes (step : Step) (tx : Rlp.Transaction1559)
+    (signed : TypedTransaction.SignedTyped)
+    (success : (certifySignedStep step tx signed).isOk = true) :
+    ∃ actual : TypedTransactionDecode.Canonical1559 signed.serialized,
+      TypedTransactionDecode.decode1559 signed.serialized = .ok actual ∧
+      actual.signature.isSome = true ∧ DepositIntent.TransactionMatches tx actual.tx ∧
+      DepositIntent.StepMatches (stepEncoding step) tx ∧
+      ∃ meaning, DepositIntent.decodeStep (stepEncoding step) = .ok meaning ∧
+        DepositIntent.decodeStep (DepositIntent.executableStep (stepEncoding step) actual.tx) = .ok meaning := by
+  cases accepted : certifySignedStep step tx signed with
+  | error error => simp [accepted, Except.isOk, Except.toBool] at success
+  | ok checked => exact DepositIntent.checked_signed_step (stepEncoding step) tx signed.serialized checked
+
 /-- The signing effect returns the public address of the key used. Reject a
     changed key or malformed signed transaction before journaling exposure. -/
 private def signWithReviewedSender (effects : Effects) (sender : Nat)
-    (tx : Rlp.Transaction1559) :
+    (step : Step) (tx : Rlp.Transaction1559) :
     IO TypedTransaction.SignedTyped := do
   let (actualSender, signed) ← effects.sign tx
   if actualSender != sender then
     throw <| IO.userError "Private key does not match the reviewed sender."
-  let _ ← fromExcept <| signedMatches tx signed
+  let _ ← fromExcept <| certifySignedStep step tx signed
   return signed
 
 private def transactionFor (effects : Effects) (chainId sender : Nat)
@@ -398,7 +485,7 @@ def executeWith (effects : Effects) (invoice : PublicInvoice) (sender : Nat)
     let tx ← transactionFor effects (chainNumber invoice.pool.chainId) sender step i
     let targetText ← fromExcept <| addressText step.to
     effects.approve s!"Step {i + 1}/{steps.size}: {step.label}; target {targetText}; value {tx.value} wei; calldata {fixedHex tx.data}; nonce {tx.nonce}; gas {tx.gas}; max fee {tx.maxFeePerGas} wei/gas; maximum gas cost {tx.gas * tx.maxFeePerGas} wei ({formatUnitsExact (tx.gas * tx.maxFeePerGas) 18} ETH)."
-    let signed ← signWithReviewedSender effects sender tx
+    let signed ← signWithReviewedSender effects sender step tx
     hashes := hashes.set! i (some signed.transactionHash)
     statuses := statuses.set! i .prepared
     let prepared ← fromExcept <| journalBytes invoice sender steps statuses hashes
@@ -504,9 +591,9 @@ def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
     ("version", toJson (1 : Nat)), ("kind", toJson ("sender-lock" : String)),
     ("sender", toJson senderText), ("journal", toJson journalPath),
     ("claim", toJson claimPath)]).compress ++ "\n").toUTF8
-  ProtectedIO.createPrivate senderLock lockBytes
+  WithdrawalJournalProgram.createProtected senderLock lockBytes
   try
-    ProtectedIO.createPrivate claimPath claimBytes
+    WithdrawalJournalProgram.createProtected claimPath claimBytes
   catch error =>
     try ProtectedIO.removePrivateExact senderLock lockBytes
     catch _ => pure ()
@@ -519,8 +606,8 @@ def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
   IO.println "Experimental native signing keeps the key outside Lean; the complete funded path has not been audited or certified."
   let effects : Effects := {
     rpc := HttpTransport.call rpc,
-    createJournal := ProtectedIO.createPrivate journalPath,
-    replaceJournal := ProtectedIO.replacePrivate journalPath,
+    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
     sign := NativeSigner.sign1559FromProtectedFile keyPath,
     waitFinality := waitReceiptDepth rpc,
     approve := fun review => do
@@ -537,3 +624,6 @@ def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
   return result
 
 end Tornado.Cli.DepositSend
+
+#print axioms Tornado.Cli.DepositSend.planInvoice_success_decodes
+#print axioms Tornado.Cli.DepositSend.certifySignedStep_success_decodes
