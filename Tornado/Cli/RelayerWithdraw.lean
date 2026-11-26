@@ -30,6 +30,7 @@ structure Input where
   experimental : Bool := false
   retryRejected : Bool := false
   yes : Bool := false
+  nonInteractive : Bool := false
   waitMs : Nat := 180000
   deriving Inhabited
 
@@ -67,13 +68,13 @@ def statusPath (directory : String) (metadata : Metadata) : IO String := do
 
 def run (input : Input) : IO (String × UInt32) := do
   if !input.experimental then
-    throw <| IO.userError "Experimental relayer withdrawal requires explicit --experimental-send."
+    throw <| IO.userError "Relayer withdrawal requires explicit --broadcast."
   if input.retryRejected then
     throw <| IO.userError "--retry-rejected is not available for the Classic relayer route."
   if input.yes then
-    throw <| IO.userError "Experimental relayer withdrawals require typed WITHDRAW approval; --yes is unavailable."
+    throw <| IO.userError "Relayer withdrawals require typed WITHDRAW approval; --yes is unavailable."
   if !HttpTransport.validRpcUrl input.rpcUrl || input.waitMs > 300000 then
-    throw <| IO.userError "Invalid experimental relayer RPC or wait bound."
+    throw <| IO.userError "Invalid relayer RPC or wait bound."
   let recipient ← checked <| recipientNumber input.recipient
   let worker ← absolute input.workerPath
   let noteFile ← absolute input.noteFile
@@ -101,10 +102,11 @@ def run (input : Input) : IO (String × UInt32) := do
     approve := fun review => do
       IO.println review
       IO.println s!"Status file: {path}"
-      IO.println "Type WITHDRAW to authorize one relayer proof submission:"
-      let answer ← (← IO.getStdin).getLine
-      if jsTrim answer != "WITHDRAW" then
-        throw <| IO.userError "Relayer withdrawal cancelled before proof exposure.",
+      if !input.nonInteractive then
+        IO.println "Type WITHDRAW to authorize one relayer proof submission:"
+        let answer ← (← IO.getStdin).getLine
+        if jsTrim answer != "WITHDRAW" then
+          throw <| IO.userError "Relayer withdrawal cancelled before proof exposure.",
     revalidate := fun current => do
       if current != request then
         throw <| IO.userError "Relayer public inputs changed after review."

@@ -94,6 +94,52 @@ def main : IO Unit := do
     .mainnet).isOk)
   let help ← withdrawBatchCommand ["--help"]
   require "runnable help" (help.startsWith "Usage: tornado withdraw batch")
+  require "recipient and file aliases documented"
+    (help.contains "--note-file is an alias" && help.contains "--recipient is an alias")
+  -- A deliberately invalid chain stops after parsing and before protected-file
+  -- reads, native signing or RPC. The aliases must reach the same guard as
+  -- canonical spellings in both separated and equals forms.
+  for aliases in [
+      ["--notes-file", "/public-note-fixture", "--receiver", "0x00000000000000000000000000000000000000ee"],
+      ["--note-file", "/public-note-fixture", "--recipient", "0x00000000000000000000000000000000000000ee"],
+      ["--note-file=/public-note-fixture", "--recipient=0x00000000000000000000000000000000000000ee"]] do
+    let failure ← try
+      let _ ← withdrawBatchCommand (aliases ++
+        ["--owner-key-file", "/public-key-fixture", "--chain", "invalid-chain", "--dry-run", "--non-interactive"])
+      pure ""
+    catch error => pure error.toString
+    require "dry-run alias parser reaches chain guard" (failure == "Chain must be 1 or 11155111.")
+  -- The same command can be previewed with its live history/prover paths.
+  -- Dry-run does not open any of these paths or start the prover.
+  for paths in [
+      ["--assets-dir", "/public-assets-fixture", "--history-cache-dir", "/public-cache-fixture",
+        "--proving-assets-root", "/public-proving-fixture"],
+      ["--assets-dir=/public-assets-fixture", "--history-cache-dir=/public-cache-fixture",
+        "--proving-assets-root=/public-proving-fixture"]] do
+    let failure ← try
+      let _ ← withdrawBatchCommand (paths ++
+        ["--notes-file", "/public-note-fixture", "--owner-key-file", "/public-key-fixture",
+          "--chain", "invalid-chain", "--dry-run", "--non-interactive"])
+      pure ""
+    catch error => pure error.toString
+    require "live asset path options reach dry-run chain guard"
+      (failure == "Chain must be 1 or 11155111.")
+  require "dry-run help explains unused live paths"
+    (help.contains "--history-cache-dir" && help.contains "--proving-assets-root" &&
+      help.contains "dry-run does not load history or proving assets")
+  for missing in [["--note-file"], ["--recipient"], ["--assets-dir"],
+      ["--history-cache-dir"], ["--proving-assets-root"]] do
+    let failure ← try
+      let _ ← withdrawBatchCommand missing
+      pure ""
+    catch error => pure error.toString
+    require "missing option argument stays actionable" (failure == "Batch withdrawal option is missing its value.")
+  let noOwner ← try
+    let _ ← withdrawBatchCommand ["--notes-file", "/public-note-fixture", "--dry-run", "--non-interactive"]
+    pure ""
+  catch error => pure error.toString
+  require "unattended dry-run requires explicit owner key"
+    (noOwner == "--non-interactive requires --owner-key-file for batch withdrawals.")
   expectFailure "no-flag send fails closed" (withdrawBatchCommand [])
   expectFailure "missing protected inputs rejected" (withdrawBatchCommand ["--dry-run"])
   let callsMade ← IO.mkRef ([] : List JsonRpc.Method)

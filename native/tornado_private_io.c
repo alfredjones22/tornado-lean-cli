@@ -112,28 +112,56 @@ static int trusted_dir(int fd) {
            (st.st_mode & (S_IWGRP | S_IWOTH)) == 0;
 }
 
-/* Walk with directory descriptors, so a symlink cannot redirect any ancestor. */
-static int private_parent(b_lean_obj_arg path_obj, char basename[NAME_MAX + 1]) {
+static void key_status_set(tornado_key_status *status, tornado_key_status value) {
+    if (status != NULL) *status = value;
+}
+
+/* Save the failing syscall's errno before any descriptor cleanup. Only a
+ * fixed category reaches the signer; errno itself never crosses that FFI. */
+static void key_open_status(tornado_key_status *status, int error, int ancestor) {
+    tornado_key_status value;
+    switch (error) {
+    case ENOENT: value = TORNADO_KEY_PATH_MISSING; break;
+    case EACCES: case EPERM: value = TORNADO_KEY_PATH_PERMISSION; break;
+    case ENOTDIR: value = TORNADO_KEY_PATH_NOT_DIRECTORY; break;
+    case ELOOP: value = TORNADO_KEY_PATH_SYMLINK; break;
+    default: value = ancestor ? TORNADO_KEY_PATH_OPEN : TORNADO_KEY_FILE_OPEN;
+    }
+    key_status_set(status, value);
+}
+
+/* Walk with directory descriptors, so a symlink cannot redirect any ancestor.
+ * A null status retains the general protected-file API and all its checks. */
+static int private_parent_status(b_lean_obj_arg path_obj,
+    char basename[NAME_MAX + 1], tornado_key_status *status) {
     const char *path = lean_string_cstr(path_obj);
     size_t length = lean_string_size(path_obj);
     if (length < 3 || length > PATH_MAX || path[0] != '/' ||
         strlen(path) != length - 1 || path[length - 2] == '/') {
+        key_status_set(status, TORNADO_KEY_PATH_INVALID);
         errno = EINVAL;
         return -1;
     }
     int dir = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (dir < 0) return -1;
-    if (!trusted_dir(dir)) { close(dir); errno = EPERM; return -1; }
+    if (dir < 0) { key_open_status(status, errno, 1); return -1; }
+    if (!trusted_dir(dir)) {
+        key_status_set(status, TORNADO_KEY_PATH_UNSAFE);
+        close(dir); errno = EPERM; return -1;
+    }
     size_t start = 1;
     for (size_t pos = 1; pos <= length - 1; pos++) {
         if (path[pos] != '/' && path[pos] != '\0') continue;
         size_t n = pos - start;
         if (n == 0 || n > NAME_MAX ||
             (n == 2 && path[start] == '.' && path[start + 1] == '.')) {
+            key_status_set(status, TORNADO_KEY_PATH_INVALID);
             close(dir); errno = EINVAL; return -1;
         }
         if (n == 1 && path[start] == '.') {
-            if (path[pos] == '\0') { close(dir); errno = EINVAL; return -1; }
+            if (path[pos] == '\0') {
+                key_status_set(status, TORNADO_KEY_PATH_INVALID);
+                close(dir); errno = EINVAL; return -1;
+            }
             start = pos + 1;
             continue;
         }
@@ -145,27 +173,56 @@ static int private_parent(b_lean_obj_arg path_obj, char basename[NAME_MAX + 1]) 
             return dir;
         }
         int next = openat(dir, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        if (next < 0) { close(dir); return -1; }
+        if (next < 0) {
+            int saved = errno;
+            key_open_status(status, saved, 1);
+            close(dir); errno = saved; return -1;
+        }
         close(dir);
         dir = next;
-        if (!trusted_dir(dir)) { close(dir); errno = EPERM; return -1; }
+        if (!trusted_dir(dir)) {
+            key_status_set(status, TORNADO_KEY_PATH_UNSAFE);
+            close(dir); errno = EPERM; return -1;
+        }
         start = pos + 1;
     }
+    key_status_set(status, TORNADO_KEY_PATH_INVALID);
     close(dir);
     errno = EINVAL;
     return -1;
 }
 
-static int private_regular(int fd, struct stat *st) {
-    if (fstat(fd, st) != 0) return 0;
-    if (!S_ISREG(st->st_mode) || !no_acl_grants(fd) ||
-        st->st_uid != geteuid() ||
-        st->st_nlink != 1 || (st->st_mode & 077) != 0 ||
-        (st->st_mode & (S_ISUID | S_ISGID | S_ISVTX)) != 0) {
-        errno = EPERM;
-        return 0;
+static int private_parent(b_lean_obj_arg path_obj, char basename[NAME_MAX + 1]) {
+    return private_parent_status(path_obj, basename, NULL);
+}
+
+int tornado_private_validate_key_anchor(b_lean_obj_arg path) {
+    char name[NAME_MAX + 1];
+    int directory = private_parent(path, name);
+    if (directory < 0) return 0;
+    return close(directory) == 0;
+}
+
+/* Preserve the original metadata predicates and short-circuit order. */
+static int private_regular_status(int fd, struct stat *st, tornado_key_status *status) {
+    if (fstat(fd, st) != 0) {
+        key_status_set(status, TORNADO_KEY_FILE_STAT); return 0;
     }
-    return 1;
+    tornado_key_status failed;
+    if (!S_ISREG(st->st_mode)) failed = TORNADO_KEY_FILE_TYPE;
+    else if (!no_acl_grants(fd)) failed = TORNADO_KEY_FILE_ACL;
+    else if (st->st_uid != geteuid()) failed = TORNADO_KEY_FILE_OWNER;
+    else if (st->st_nlink != 1) failed = TORNADO_KEY_FILE_LINKS;
+    else if ((st->st_mode & 077) != 0 ||
+             (st->st_mode & (S_ISUID | S_ISGID | S_ISVTX)) != 0) failed = TORNADO_KEY_FILE_MODE;
+    else return 1;
+    key_status_set(status, failed);
+    errno = EPERM;
+    return 0;
+}
+
+static int private_regular(int fd, struct stat *st) {
+    return private_regular_status(fd, st, NULL);
 }
 
 /* Byte-level equivalent of Domain.jsWhitespace / PrivateKeyInput.parse.
@@ -206,7 +263,7 @@ static uint32_t hex_key_nibble(uint8_t value, uint32_t *valid) {
     return (digit & (0u - is_digit)) | ((alpha + 10u) & (0u - is_alpha));
 }
 
-static int parse_hex_key(const uint8_t *raw, size_t size, uint8_t key32[32]) {
+int tornado_private_parse_secp256k1_key(const uint8_t *raw, size_t size, uint8_t key32[32]) {
     size_t start = 0, stop = size;
     while (start < size) {
         size_t skip = hex_key_whitespace_at(raw, size, start);
@@ -234,37 +291,57 @@ static int parse_hex_key(const uint8_t *raw, size_t size, uint8_t key32[32]) {
  * policy as readPrivate. The bridge owns clearing scratch and key32. */
 int tornado_private_read_secp256k1_key(
     b_lean_obj_arg path, uint8_t key32[32],
-    uint8_t scratch[TORNADO_MAX_HEX_KEY_FILE]) {
+    uint8_t scratch[TORNADO_MAX_HEX_KEY_FILE], tornado_key_status *status) {
+    key_status_set(status, TORNADO_KEY_UNKNOWN);
     if (key32 == NULL || scratch == NULL) return 0;
     char name[NAME_MAX + 1];
-    int dir = private_parent(path, name);
+    int dir = private_parent_status(path, name, status);
     if (dir < 0) return 0;
     int fd = openat(dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    int saved_open_errno = errno;
     close(dir);
-    if (fd < 0) return 0;
-    struct stat before, after;
-    if (!private_regular(fd, &before) || before.st_size < 0 ||
-        before.st_size > TORNADO_MAX_HEX_KEY_FILE) {
-        close(fd);
+    if (fd < 0) {
+        key_open_status(status, saved_open_errno, 0);
+        errno = saved_open_errno;
         return 0;
+    }
+    struct stat before, after;
+    if (!private_regular_status(fd, &before, status)) {
+        close(fd); return 0;
+    }
+    if (before.st_size < 0 || before.st_size > TORNADO_MAX_HEX_KEY_FILE) {
+        key_status_set(status, TORNADO_KEY_FILE_SIZE);
+        close(fd); return 0;
     }
     size_t size = (size_t)before.st_size;
     size_t done = 0;
     while (done < size) {
         ssize_t n = read(fd, scratch + done, size - done);
         if (n < 0 && errno == EINTR) continue;
-        if (n <= 0) { close(fd); return 0; }
+        if (n <= 0) {
+            key_status_set(status, TORNADO_KEY_FILE_READ);
+            close(fd); return 0;
+        }
         done += (size_t)n;
     }
-    int stable = private_regular(fd, &after) &&
+    int metadata_ok = private_regular_status(fd, &after, status);
+    int stable = metadata_ok &&
                  before.st_dev == after.st_dev && before.st_ino == after.st_ino &&
                  before.st_size == after.st_size &&
                  before.st_mtime == after.st_mtime &&
                  before.st_ctime == after.st_ctime &&
                  ST_MTIME_NSEC(before) == ST_MTIME_NSEC(after) &&
                  ST_CTIME_NSEC(before) == ST_CTIME_NSEC(after);
-    if (close(fd) != 0) stable = 0;
-    return stable && parse_hex_key(scratch, size, key32);
+    if (metadata_ok && !stable) key_status_set(status, TORNADO_KEY_FILE_UNSTABLE);
+    if (close(fd) != 0) {
+        key_status_set(status, TORNADO_KEY_FILE_CLOSE); stable = 0;
+    }
+    if (!stable) return 0;
+    if (!tornado_private_parse_secp256k1_key(scratch, size, key32)) {
+        key_status_set(status, TORNADO_KEY_FILE_FORMAT); return 0;
+    }
+    key_status_set(status, TORNADO_KEY_OK);
+    return 1;
 }
 
 /* Verify a final directory by inode, after private_parent has walked every
@@ -505,7 +582,18 @@ LEAN_EXPORT lean_obj_res tornado_private_create(
     int dir = private_parent(path, name);
     if (dir < 0) return failure_errno("path validation");
     int fd = openat(dir, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
-    if (fd < 0) { close(dir); return failure_errno("exclusive create"); }
+    if (fd < 0) {
+        int saved = errno;
+        close(dir);
+        if (saved == EEXIST) {
+            lean_inc(path);
+            return lean_io_result_mk_error(lean_mk_io_error_already_exists_file(
+                (lean_object *)path, (uint32_t)saved,
+                lean_mk_string("The existing protected file was left unchanged.")));
+        }
+        errno = saved;
+        return failure_errno("exclusive create");
+    }
     struct stat st;
     int have_inode = fstat(fd, &st) == 0;
     int good = have_inode && fchmod(fd, 0600) == 0 && private_regular(fd, &st) &&

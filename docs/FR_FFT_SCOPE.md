@@ -15,7 +15,7 @@ length. These are universal source-level constructions, rather than
 assumptions that the native transform returned successfully. See
 [`NativeTransform.lean`](../proofs/LeanCryptoProofs/FFT/NativeTransform.lean).
 
-The pinned TypeScript SDK's `createTornadoProver` passes `nqr: 7` into
+The pinned reference SDK's `createTornadoProver` passes `nqr: 7` into
 `micro-zk-proofs@0.3.1`; that library uses `@noble/curves`' BN254 Fr FFT. The
 SDK's old proving key was built using websnark's NQR 7. Using another
 nonquadratic residue changes the root tower and yields a different H

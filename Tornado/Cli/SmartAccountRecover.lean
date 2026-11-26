@@ -144,6 +144,7 @@ private structure Options where
   chain : String := "1"
   rpc : Option String := none
   dryRun : Bool := false
+  nonInteractive : Bool := false
   help : Bool := false
   deriving Inhabited
 
@@ -153,6 +154,7 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | [] => .ok options
   | "-h" :: _ | "--help" :: _ => .ok { options with help := true }
   | "--dry-run" :: rest => parseOptions rest { options with dryRun := true }
+  | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
   | "--owner" :: value :: rest => parseOptions rest { options with owner := some value }
   | "--owner-key-file" :: value :: rest => parseOptions rest { options with ownerKeyFile := some value }
   | "--receiver" :: value :: rest => parseOptions rest { options with receiver := some value }
@@ -183,21 +185,25 @@ private def help : String :=
   "  --receiver <address>  Recovery destination (default: owner)\n" ++
   "  --chain <id>         Ethereum chain ID (default: 1)\n" ++
   "  --rpc <url>          HTTPS chain RPC URL\n" ++
-  "  --dry-run            Required; this native command cannot submit\n"
+  "  --dry-run            Required; this native command cannot submit\n" ++
+  "  --non-interactive    Require --owner or --owner-key-file; never prompt for a key\n"
 
 def recoverCommand (args : List String) : IO String := do
   let options ← fromExcept (parseOptions args)
   if options.help then return help
+  if options.nonInteractive && options.owner.isNone && options.ownerKeyFile.isNone then
+    throw <| IO.userError "--non-interactive requires --owner or --owner-key-file for recovery review."
   if !options.dryRun then
     throw <| IO.userError "Native smart-account recovery only supports --dry-run."
   let owner ← match options.ownerKeyFile, options.owner with
-    | none, none => throw <| IO.userError "Provide --owner or --owner-key-file."
+    | none, none => do
+      let source ← NativeSigner.resolveKeyFile none
+      NativeSigner.addressFromProtectedFile source
     | none, some ownerRaw => fromExcept (parseOwner ownerRaw)
     | some file, expected => do
       let current ← IO.currentDir
       let absolute := if (System.FilePath.mk file).isAbsolute then file
         else (current / file).toString
-      let _ ← (System.FilePath.mk absolute).symlinkMetadata
       let derived ← NativeSigner.addressFromProtectedFile absolute
       if let some raw := expected then
         if (← fromExcept <| parseOwner raw) != derived then

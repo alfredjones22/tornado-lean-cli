@@ -119,13 +119,28 @@ private def readCapped (handle : IO.FS.Handle) (limit : Nat := maxResponseBytes)
     output := output ++ chunk
   throw <| IO.userError "Prover worker output exceeded the public-data limit."
 
+private abbrev ExitStatus := IO.Ref (Option UInt32)
+
+/-- tryWait reaps a finished process. Remember that result so neither the
+reader loop nor cleanup attempts to reap it again or signal a reused PID. -/
+private def pollChild (child : IO.Process.Child
+    { stdin := .null, stdout := .piped, stderr := .null })
+    (exitStatus : ExitStatus) : IO (Option UInt32) := do
+  match ← exitStatus.get with
+  | some status => return some status
+  | none =>
+    let status ← child.tryWait
+    exitStatus.set status
+    return status
+
 private def childOutput (child : IO.Process.Child
     { stdin := .null, stdout := .piped, stderr := .null })
-    (timeoutMs : Nat) (limit : Nat := maxResponseBytes) : IO ByteArray := do
+    (exitStatus : ExitStatus) (timeoutMs : Nat)
+    (limit : Nat := maxResponseBytes) : IO ByteArray := do
   let reader ← IO.asTask (readCapped child.stdout limit)
   let started ← IO.monoMsNow
   repeat
-    let status ← child.tryWait
+    let status ← pollChild child exitStatus
     if status.isSome && status != some 0 then
       throw <| IO.userError "Prover worker failed."
     if ← IO.hasFinished reader then
@@ -145,17 +160,51 @@ private def childOutput (child : IO.Process.Child
     Lean's portable child API exposes SIGTERM, but not SIGKILL; a hostile child
     that ignores termination can outlive this best-effort cleanup. -/
 private def terminateChild (child : IO.Process.Child
-    { stdin := .null, stdout := .piped, stderr := .null }) : IO Unit := do
+    { stdin := .null, stdout := .piped, stderr := .null })
+    (exitStatus : ExitStatus) : IO Unit := do
+  -- An observed exit has already been reaped. A failed poll also gives no
+  -- authority to signal a PID that may no longer identify our child.
+  let status ← try pollChild child exitStatus catch _ => return
+  if status.isSome then return
   try child.kill catch _ => pure ()
   for _ in [0:20] do
-    let status ← try child.tryWait catch _ => pure none
-    if status.isSome then
-      try
-        let _ ← child.wait
-        pure ()
-      catch _ => pure ()
-      return
+    let status ← try pollChild child exitStatus catch _ => return
+    if status.isSome then return
     IO.sleep 100
+
+/-- Only caller-supplied network and fixed troubleshooting text appear here.
+Worker output and secret-dependent rejection details remain suppressed. -/
+private def inspectionFailure (chainId : Nat) (batch : Bool) : String :=
+  (if batch then "Prover batch inspection failed or was rejected."
+    else "Prover metadata inspection failed or was rejected.") ++
+  "\nInspection happens before proof generation. Selected network: " ++
+  (if chainId == 1 then "Ethereum mainnet (chain 1). For Sepolia notes, add --chain 11155111."
+    else if chainId == 11155111 then "Sepolia (chain 11155111). For mainnet notes, use --chain 1."
+    else "unsupported chain.") ++
+  "\nCheck the backup path, note format and private file permissions (chmod 600 <notes-file>)." ++
+  (if batch then " Batches require 1–12 distinct notes of the same asset on the selected network."
+    else " If the backup contains several notes, select one with --note-index <1-based index>.") ++
+  "\nIf the worker is missing or outdated, run lake build tornado tornado_prover_worker."
+
+/-- Inspect path metadata only. The parent does not open/read the backup,
+and the worker still enforces all protected-file checks when opening it. -/
+private def checkNoteFilePath (noteFile : String) : IO Unit := do
+  let metadata ← try (System.FilePath.mk noteFile).symlinkMetadata
+    catch error =>
+      match error with
+      | .noFileOrDirectory .. =>
+        throw <| IO.userError s!"Note backup file was not found: {noteFile}\nUse an existing absolute path. In a shell, ~/ expands to your home directory only when the tilde is unquoted and has no backslash before it."
+      | .permissionDenied .. =>
+        throw <| IO.userError s!"Cannot access note backup path: {noteFile}\nCheck access to this file and its parent directories."
+      | _ => throw <| IO.userError s!"Could not inspect note backup path: {noteFile}"
+  if metadata.type != .file then
+    throw <| IO.userError s!"Note backup must be a regular file, without a symlink: {noteFile}"
+  if metadata.numLinks != 1 then
+    throw <| IO.userError s!"Note backup has multiple hard links; use its original protected file: {noteFile}"
+  if metadata.byteSize == 0 then
+    throw <| IO.userError s!"Note backup file is empty: {noteFile}"
+  if metadata.byteSize > 1024 * 1024 then
+    throw <| IO.userError s!"Note backup exceeds the one MiB private-file limit: {noteFile}"
 
 /-- Obtain a selected note's public metadata without opening its protected
 backup in the parent. The worker executable remains a trusted, unpinned
@@ -169,6 +218,7 @@ def inspectPrototype (workerPath noteFile : String) (chainId : Nat)
       (chainId != 1 && chainId != 11155111) ||
       timeoutMs == 0 || timeoutMs > workerTimeoutMs then
     throw <| IO.userError "Invalid prover metadata inspection request."
+  checkNoteFilePath noteFile
   let args := #["--inspect", "--note-file", noteFile, "--chain", toString chainId] ++
     match noteIndex with
     | none => #[]
@@ -178,9 +228,10 @@ def inspectPrototype (workerPath noteFile : String) (chainId : Nat)
       cmd := workerPath, args := args,
       stdin := .null, stdout := .piped, stderr := .null,
       inheritEnv := false, setsid := true }
-    catch _ => throw <| IO.userError "Prover metadata worker could not start."
+    catch _ => throw <| IO.userError "Prover metadata worker could not start. Run lake build tornado tornado_prover_worker to build the CLI and its sibling worker."
+  let exitStatus ← IO.mkRef (none : Option UInt32)
   try
-    let output ← childOutput child timeoutMs
+    let output ← childOutput child exitStatus timeoutMs
     if output.isEmpty || output[output.size - 1]! != 10 then
       throw <| IO.userError "Invalid prover metadata framing."
     let some raw := String.fromUTF8? (output.extract 0 (output.size - 1))
@@ -192,8 +243,8 @@ def inspectPrototype (workerPath noteFile : String) (chainId : Nat)
       throw <| IO.userError "Prover metadata belongs to another network."
     return metadata
   catch _ =>
-    terminateChild child
-    throw <| IO.userError "Prover metadata inspection failed or was rejected."
+    terminateChild child exitStatus
+    throw <| IO.userError (inspectionFailure chainId false)
 
 /-- Launch the isolated worker with a public request file and a protected
     note-file path. This function does not read or parse the note file. The
@@ -201,7 +252,7 @@ def inspectPrototype (workerPath noteFile : String) (chainId : Nat)
     the bounded time/output limits. A failure leaks no worker stderr. -/
 def runPrototype (workerPath assetsRoot noteFile : String)
     (noteIndex : Option String) (request : Request)
-    (timeoutMs : Nat := workerTimeoutMs) : IO (Accepted request) := do
+    (timeoutMs : Nat := workerTimeoutMs) (onVerifying : IO Unit := pure ()) : IO (Accepted request) := do
   let checkAbsolute (path : String) : IO Unit :=
     unless (System.FilePath.mk path).isAbsolute do
       throw <| IO.userError "Prover worker requires absolute paths."
@@ -231,8 +282,9 @@ def runPrototype (workerPath assetsRoot noteFile : String)
       }
     catch _ =>
       throw <| IO.userError "Prover worker could not start."
+    let exitStatus ← IO.mkRef (none : Option UInt32)
     try
-      let output ← childOutput child timeoutMs
+      let output ← childOutput child exitStatus timeoutMs
       if output.isEmpty || output[output.size - 1]! != 10 then
         throw <| IO.userError "Invalid prover worker response framing."
       let some line := String.fromUTF8? (output.extract 0 (output.size - 1))
@@ -240,11 +292,12 @@ def runPrototype (workerPath assetsRoot noteFile : String)
       let result ← match Result.decode line with
         | .ok result => pure result
         | .error _ => throw <| IO.userError "Invalid prover worker response."
+      onVerifying
       match acceptResponse request result with
       | .ok accepted => return accepted
       | .error _ => throw <| IO.userError "Prover worker proof was rejected."
     catch _ =>
-      terminateChild child
+      terminateChild child exitStatus
       throw <| IO.userError "Prover worker failed or was rejected."
 
 private def signerPublicLine (workerPath : String) (args : Array String)
@@ -256,25 +309,27 @@ private def signerPublicLine (workerPath : String) (args : Array String)
       cmd := workerPath, args, stdin := .null, stdout := .piped, stderr := .null,
       inheritEnv := false, setsid := true }
     catch _ => throw <| IO.userError "Isolated signer could not start."
+  let exitStatus ← IO.mkRef (none : Option UInt32)
   try
-    let output ← childOutput child timeoutMs limit
+    let output ← childOutput child exitStatus timeoutMs limit
     if output.isEmpty || output[output.size - 1]! != 10 then
       throw <| IO.userError "Invalid isolated signer framing."
     let some raw := String.fromUTF8? (output.extract 0 (output.size - 1))
       | throw <| IO.userError "Invalid isolated signer encoding."
     return raw
   catch _ =>
-    terminateChild child
+    terminateChild child exitStatus
     throw <| IO.userError "Isolated signer failed or was rejected."
 
 /-- Bounded ordered inspection of every selected note. No raw note is ever
 read by this parent; malformed/duplicate/mixed-asset batches fail closed. -/
 def inspectBatchPrototype (workerPath noteFile : String) (chainId : Nat)
     (timeoutMs : Nat := workerTimeoutMs) : IO (Array Metadata) := do
+  if !(System.FilePath.mk noteFile).isAbsolute ||
+      (chainId != 1 && chainId != 11155111) then
+    throw <| IO.userError "Invalid prover batch inspection."
+  checkNoteFilePath noteFile
   try
-    if !(System.FilePath.mk noteFile).isAbsolute ||
-        (chainId != 1 && chainId != 11155111) then
-      throw <| IO.userError "Invalid prover batch inspection."
     let raw ← signerPublicLine workerPath
       #["--inspect-batch", "--note-file", noteFile, "--chain", toString chainId]
       timeoutMs BatchMetadata.maxBytes
@@ -284,7 +339,7 @@ def inspectBatchPrototype (workerPath noteFile : String) (chainId : Nat)
     if items.any (fun item => item.chainId != chainId) then
       throw <| IO.userError "Prover batch belongs to another chain."
     return items
-  catch _ => throw <| IO.userError "Prover batch inspection failed or was rejected."
+  catch _ => throw <| IO.userError (inspectionFailure chainId true)
 
 private def checkSignerIdentity (metadata : Metadata)
     (identity : ProverSignerWire.Identity) : Except String Unit := do

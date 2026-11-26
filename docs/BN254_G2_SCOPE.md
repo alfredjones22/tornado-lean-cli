@@ -2,7 +2,7 @@
 
 [`BN254G2.lean`](../Tornado/Protocol/BN254G2.lean) implements the quadratic extension field `Fp2` and BN254 twist G2 Jacobian add, double, scalar multiplication, and affine normalization in native Lean. It shares the bounded base-field values from [`BN254G1.lean`](../Tornado/Protocol/BN254G1.lean). Unlike the G1 helper, G2 scalar multiplication does not reduce its scalar modulo the subgroup order, so an order check is meaningful.
 
-[`tests/BN254G2.lean`](../tests/BN254G2.lean) checks 14 public scalar/addition outputs against [pinned noble vectors](../fixtures/bn254-g2-vectors.json), verifies the pinned generator has the expected scalar order, and rejects off-twist, out-of-field, and zero-inverse inputs. [`generate-bn254-g2-vectors.mjs`](../scripts/generate-bn254-g2-vectors.mjs) regenerates those vectors from the pinned TypeScript dependency; `--check` compares them byte for byte. These finite checks do not prove the full group law, subgroup membership of arbitrary decoded points, or equivalence for all inputs.
+[`tests/BN254G2.lean`](../tests/BN254G2.lean) checks 14 public scalar/addition outputs against [pinned noble vectors](../fixtures/bn254-g2-vectors.json), verifies the pinned generator has the expected scalar order, and rejects off-twist, out-of-field, and zero-inverse inputs. [`generate-bn254-g2-vectors.mjs`](../scripts/generate-bn254-g2-vectors.mjs) regenerates those vectors from the pinned independent noble dependency; `--check` compares them byte for byte. These finite checks do not prove the full group law, subgroup membership of arbitrary decoded points, or equivalence for all inputs.
 
 The [mathematical workspace](../proofs/README.md) additionally proves Fp2
 field interpretation and inverse construction, all admitted native G2

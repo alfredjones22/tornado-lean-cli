@@ -1,7 +1,7 @@
 # Native batch 4337 withdrawal status scope
 
 [`Tornado/Cli/BatchWithdrawalStatus.lean`](../Tornado/Cli/BatchWithdrawalStatus.lean)
-provides reconciliation and protected persistence for TypeScript `batch-4337`
+provides reconciliation and protected persistence for `batch-4337`
 status files. It accepts `--status-file <path>`, optional `--rpc <HTTPS URL>` and
 `--bundler-url <HTTPS URL>`, and `--help`. The selected file must be listed in
 the record's same-directory, opaque per-note `statusFiles` paths. The command
@@ -41,8 +41,8 @@ completion marker. A protected compare-and-replace first writes its new
 observation with `nativeBatchStatusSync.state = "in-progress"`. Every other
 mirror is then replaced against its exact pre-read bytes, retaining all
 candidates and reservations. Only after every mirror write is acknowledged
-does the command mark the first record `complete`. Existing TypeScript record
-parsers tolerate this extra metadata.
+does the command mark the first record `complete`. The marker is additional
+observation metadata; it does not change the reserved candidate identity.
 
 A crash or failed CAS can leave partially refreshed observations. The
 in-progress marker and reservations remain present, the command reports

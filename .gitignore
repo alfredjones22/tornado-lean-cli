@@ -6,3 +6,10 @@
 .env
 node_modules/
 reports/
+tornado-deposit-*.json
+tornado-withdraw-*.json
+.tornado-sender-*.lock
+.tornado-invoice-*.claim
+.*.tornado-lock
+.tornado-replace-*
+.sepolia-tests/

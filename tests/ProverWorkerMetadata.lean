@@ -21,6 +21,15 @@ private def rejects (action : IO α) : IO Bool := do
     return false
   catch _ => return true
 
+private def rejectionMessage (action : IO α) : IO String := do
+  let message ← try
+    let _ ← action
+    pure none
+  catch error => pure (some error.toString)
+  match message with
+  | some text => pure text
+  | none => throw <| IO.userError "Expected public fixture inspection to fail."
+
 private def number (raw : String) : IO Nat := do
   let bytes ← checked <| parseHexBytes raw
   return bytes.data.foldl (fun n b => n * 256 + b.toNat) 0
@@ -76,6 +85,21 @@ def main (args : List String) : IO UInt32 := do
   ProtectedIO.createPrivate notePath raw.toUTF8
   let inspected ← ProverWorkerClient.inspectPrototype workerPath notePath 1
   require (inspected == expected) "Worker metadata differs from the public unfunded fixture."
+  for inspect in [
+      ProverWorkerClient.inspectPrototype (workerPath ++ ".missing") (notePath ++ ".missing") 1 *> pure (),
+      ProverWorkerClient.inspectBatchPrototype (workerPath ++ ".missing") (notePath ++ ".missing") 1 *> pure ()] do
+    let missing ← rejectionMessage inspect
+    require ((missing.splitOn "Note backup file was not found:").length > 1 &&
+      (missing.splitOn (notePath ++ ".missing")).length > 1 &&
+      (missing.splitOn "tilde").length > 1)
+      "Missing note path reached the worker or lost its resolved-path diagnostic."
+  let emptyPath := privateDir ++ "/empty-note"
+  ProtectedIO.createPrivate emptyPath ByteArray.empty
+  let empty ← rejectionMessage <| ProverWorkerClient.inspectPrototype workerPath emptyPath 1
+  let directory ← rejectionMessage <| ProverWorkerClient.inspectBatchPrototype workerPath privateDir 1
+  require ((empty.splitOn "Note backup file is empty:").length > 1 &&
+    (directory.splitOn "must be a regular file").length > 1)
+    "Empty/directory note paths were reported as a proving or network failure."
   let fixture ← checked <| Json.parse (← IO.FS.readFile "fixtures/prover-signer-public.json")
   let fixtureText (name : String) : IO String := do
     checked <| (← checked <| fixture.getObjVal? name).getStr?
@@ -151,8 +175,35 @@ def main (args : List String) : IO UInt32 := do
   require (second.commitment == (← number secondSelected.publicIdentity.commitment) &&
     second.statusFileName == (← checked <| Tornado.Cli.WithdrawOne.statusFileName secondSelected.note))
     "Selected metadata index or keyed status label changed."
-  require (← rejects <| ProverWorkerClient.inspectPrototype workerPath notePath 11155111)
-    "Metadata inspection accepted a note on another chain."
+  let wrongSepolia ← rejectionMessage <|
+    ProverWorkerClient.inspectPrototype workerPath notePath 11155111
+  require ((wrongSepolia.splitOn "Selected network: Sepolia (chain 11155111)").length > 1 &&
+    (wrongSepolia.splitOn "--chain 1.").length > 1 &&
+    (wrongSepolia.splitOn raw).length == 1)
+    "Wrong-chain single-note failure omitted network guidance or disclosed note text."
+  let sepoliaPath := privateDir ++ "/sepolia-note"
+  let sepoliaRaw := raw.replace "-0.01-1-" "-0.01-11155111-"
+  ProtectedIO.createPrivate sepoliaPath sepoliaRaw.toUTF8
+  let sepolia ← ProverWorkerClient.inspectPrototype workerPath sepoliaPath 11155111
+  require (sepolia.chainId == 11155111 && sepolia.amount == inspected.amount)
+    "Sepolia single-note metadata inspection failed with the correct chain."
+  let sepoliaBatchPath := privateDir ++ "/sepolia-batch"
+  ProtectedIO.createPrivate sepoliaBatchPath
+    (sepoliaRaw ++ "\n" ++ secondRaw.replace "-0.01-1-" "-0.01-11155111-").toUTF8
+  let sepoliaBatch ← ProverWorkerClient.inspectBatchPrototype workerPath sepoliaBatchPath 11155111
+  require (sepoliaBatch.size == 2 && sepoliaBatch.all (fun item => item.chainId == 11155111))
+    "Sepolia batch metadata inspection failed with the correct chain."
+  let wrongMainnetOne ← rejectionMessage <|
+    ProverWorkerClient.inspectPrototype workerPath sepoliaPath 1
+  let wrongMainnetBatch ← rejectionMessage <|
+    ProverWorkerClient.inspectBatchPrototype workerPath sepoliaBatchPath 1
+  for message in [wrongMainnetOne, wrongMainnetBatch] do
+    require ((message.splitOn "Selected network: Ethereum mainnet (chain 1)").length > 1 &&
+      (message.splitOn "--chain 11155111").length > 1 &&
+      (message.splitOn "before proof generation").length > 1 &&
+      (message.splitOn "chmod 600").length > 1 &&
+      (message.splitOn sepoliaRaw).length == 1)
+      "Default-mainnet failure omitted Sepolia guidance or disclosed note text."
   require (← rejects <| ProverWorkerClient.inspectPrototype workerPath notePath 2)
     "Metadata inspection accepted an unsupported chain."
   require (← rejects <| ProverWorkerClient.inspectPrototype workerPath notePath 1 (some "0"))

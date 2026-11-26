@@ -8,7 +8,7 @@ The per-note claim wrapper additionally calls `checkPrivateDirectory` on its `cl
 
 The [regression test](../scripts/test-protected-io.mjs) exercises exclusive creation, mode, symlink parents and leaves, hard links, traversal, public files, safe `.` components, and on macOS both an inherited directory ACL and a direct file ACL. The [claim test](../scripts/test-note-claims.mjs) rejects listable directories and tests a two-process exclusive race. The ACL regressions reject inherited and direct access grants. These tests do not prove that the OS or storage device honors `fsync` under every crash, or that same-user malicious processes cannot race or inspect this process's memory.
 
-`notes create` and `notes create-plan` write exclusively through this binding; `notes inspect` and `notes invoice` read through it. Their paths can be absolute or relative to the working directory; `..` path components are rejected. The TypeScript CLI accepts some paths and filesystem configurations this stricter binding refuses.
+`notes create` and `notes create-plan` write exclusively through this binding; `notes inspect` and `notes invoice` read through it. Their paths can be absolute or relative to the working directory; `..` path components are rejected.
 
 Mutable journals use protected byte-for-byte compare-and-replace under an
 exclusive same-directory lock: a new private inode is written/synced, renamed

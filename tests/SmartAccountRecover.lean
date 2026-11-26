@@ -70,11 +70,16 @@ def main : IO UInt32 := do
     let help ← recoverCommand ["--help"]
     require (help.startsWith "Usage: tornado smart-account recover --owner <address> --dry-run")
       "Safe recovery help changed."
-    rejects (recoverCommand ["--dry-run"]) "Missing owner reached the RPC."
+    -- Omitted account sources now use the native terminal prompt. Its no-TTY
+    -- and file errors are tested by the compiled CLI and signer suites.
+    let noOwner ← try
+      let _ ← recoverCommand ["--dry-run", "--non-interactive"]
+      pure ""
+    catch error => pure error.toString
+    require (noOwner == "--non-interactive requires --owner or --owner-key-file for recovery review.")
+      "Unattended recovery review attempted to prompt for an unspecified owner key."
     rejects (recoverCommand ["--owner", "0x1111111111111111111111111111111111111111"])
       "Recovery without --dry-run reached the RPC."
-    rejects (recoverCommand ["--owner-key-file", "/missing", "--dry-run"])
-      "Private-key file option was accepted by the planner."
     rejects (recoverCommand ["--owner", "0x1111111111111111111111111111111111111111",
       "--dry-run", "--yes"]) "Send authorization was accepted by the planner."
 

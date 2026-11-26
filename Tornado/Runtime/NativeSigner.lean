@@ -33,6 +33,35 @@ and recovery-id-selected public key must match the supplied public key. -/
 @[extern "tornado_verify_public_digest"]
 opaque verifyPublicDigest (publicKey digest signature : @& ByteArray) : IO Bool
 
+/-- Read directly from a no-echo controlling terminal into locked native
+memory. The returned command-local alias is public and is not a disk file. -/
+@[extern "tornado_secure_prompt_key"]
+opaque promptKey (anchor : @& String) : IO String
+
+@[extern "tornado_secure_clear_prompt_key"]
+opaque clearPromptKey : IO Unit
+
+/-- File arguments remain optional at the CLI boundary. Interactive sources
+use the journal directory for durable claims, or the home directory otherwise.
+No private key or terminal input is represented by a Lean value. -/
+def resolveKeyFile (file : Option String) (journal : Option String := none) : IO String := do
+  let current ← IO.currentDir
+  if let some path := file then
+    return if (System.FilePath.mk path).isAbsolute then path else (current / path).toString
+  let directory ← match journal with
+    | some path => do
+      let absolute := if (System.FilePath.mk path).isAbsolute then System.FilePath.mk path
+        else current / path
+      let some parent := absolute.parent
+        | throw <| IO.userError "Journal has no signing directory."
+      pure parent
+    | none => do
+      let some homeDirectory ← IO.getEnv "HOME"
+        | throw <| IO.userError "Provide a key file when no home directory is configured."
+      pure (System.FilePath.mk homeDirectory)
+  let parent := directory.toString
+  promptKey (parent ++ (if parent.endsWith "/" then "" else "/") ++ ".tornado-interactive-key-")
+
 private def checked (value : Except String α) : IO α :=
   match value with
   | .ok result => pure result

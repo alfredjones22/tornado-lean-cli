@@ -248,8 +248,9 @@ private def exactLogs (context : RpcContext) (registeredBlock block : Nat) :
 private def findDeposit (state : State) (commitment : ByteArray) :
     Except String DepositRecord := do
   let foundRows := state.deposits.filter (fun row => row.commitment == commitment)
-  if foundRows.size != 1 then
-    throw "No unique matching deposit was found in the selected pool history."
+  if foundRows.isEmpty then
+    throw "Deposit not found in checked pool history. For a recent deposit, let the RPC catch up or try another --rpc; also check --chain and the note backup."
+  if foundRows.size > 1 then throw "Duplicate matching deposits in the selected pool history."
   return foundRows[0]!
 
 private def findWithdrawal (state : State) (nullifierHash : ByteArray) :

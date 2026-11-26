@@ -197,7 +197,12 @@ def main : IO Unit := do
   let (alwaysReject, _) ← makeMock { alwaysRejectLogs := true } one.root two.root
   expectFailure "bounded split eventually rejects" (syncSelectedPool alwaysReject prior false)
   let (oversizedWindow, oversizedCalls) ← makeMock { head := 2100200 } one.root two.root
-  expectFailure "RPC scan window cap" (syncSelectedPool oversizedWindow prior false)
+  let windowMessage ← try
+      let _ ← syncSelectedPool oversizedWindow prior false
+      pure ""
+    catch error => pure error.toString
+  require "RPC scan window cap and archive guidance"
+    (windowMessage == "Pool history exceeds the bounded RPC replay window. Use --rpc with an archive endpoint that can validate the bundled checkpoint.")
   require "overlarge window fails before log reads" ((← oversizedCalls.get) == 0)
   let (deadline, _) ← makeMock { expireDeadline := true } one.root two.root
   expectFailure "aggregate deadline" (syncSelectedPool deadline prior)

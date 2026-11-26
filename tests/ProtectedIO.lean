@@ -28,7 +28,15 @@ def main (args : List String) : IO Unit := do
   ensure ((← readPrivate privatePath) == content) "Private file roundtrip failed"
   ensure ((← readPrivate (base ++ "/./private")) == content)
     "Current-directory component was rejected"
-  ensure (← failed (createPrivate privatePath content)) "Existing file was overwritten"
+  let collision ← try
+    createPrivate privatePath "replacement must not be written".toUTF8
+    pure false
+  catch error =>
+    match error with
+    | .alreadyExists filename code _ => pure (filename == some privatePath && code != 0)
+    | _ => pure false
+  ensure collision "Exclusive create lost its structured already-exists error and path"
+  ensure ((← readPrivate privatePath) == content) "Existing file was overwritten"
   ensure (← failed (readPrivate (base ++ "/public"))) "Public file was accepted"
   ensure (← failed (readPrivate (base ++ "/hardlink"))) "Hard link was accepted"
   ensure (← failed (readPrivate (base ++ "/symlink"))) "Symbolic link was accepted"

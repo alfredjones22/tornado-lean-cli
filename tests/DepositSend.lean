@@ -12,6 +12,8 @@ private def require (condition : Bool) (message : String) : IO Unit :=
   unless condition do throw <| IO.userError message
 
 private def hex (bytes : ByteArray) : String := "0x" ++ bytesToHex bytes
+private def quantity (value : Nat) : String :=
+  "0x" ++ String.ofList (Nat.toDigits 16 value)
 
 private def natBytes (value count : Nat) : ByteArray := Id.run do
   let mut bytes := ByteArray.empty
@@ -47,7 +49,10 @@ private def receipt (hashBytes : ByteArray) (sender : Nat)
 
 private def scenario (invoice : PublicInvoice) (sender : Nat)
     (key : ByteArray) (readings : Readings)
-    (failReplace failSend pendingNonce failFinality highFee : Bool) :
+    (failReplace failSend pendingNonce failFinality highFee : Bool)
+    (estimate : Nat := 1156615) (feeBase : Option Nat := none)
+    (priorityFee : Nat := 1)
+    (expectedFailure : Option String := none) :
     IO (Bool × ByteArray × Nat × Nat) := do
   let journal ← IO.mkRef ByteArray.empty
   let sends ← IO.mkRef (0 : Nat)
@@ -61,11 +66,12 @@ private def scenario (invoice : PublicInvoice) (sender : Nat)
         if pendingNonce && params[1]? == some (toJson ("pending" : String)) then
           return toJson ("0x1" : String)
         return toJson ("0x0" : String)
-      | .estimateGas => return toJson ("0x186a0" : String)
-      | .feeHistory => return Json.mkObj [
-          ("baseFeePerGas", toJson (if highFee then #["0x2540be400", "0x2540be400"]
-            else #["0x1", "0x1"])),
-          ("reward", toJson #[#["0x1"]])]
+      | .estimateGas => return toJson (quantity estimate)
+      | .feeHistory =>
+        let base := feeBase.getD (if highFee then 10000000000 else 1)
+        return Json.mkObj [
+          ("baseFeePerGas", toJson (#[quantity base, quantity base])),
+          ("reward", toJson (#[#[quantity priorityFee]]))]
       | .getBalance => return toJson ("0xde0b6b3a7640000" : String)
       | .sendRawTransaction =>
         sends.modify (· + 1)
@@ -87,6 +93,10 @@ private def scenario (invoice : PublicInvoice) (sender : Nat)
     sign := fun tx => do
       require (← approved.get) "Signing key was used before approval."
       require (!(← journal.get).isEmpty) "Signing key was used before the planned journal."
+      require (tx.gas == estimate * 120 / 100 + 1)
+        "Signed transaction did not retain the buffered gas estimate."
+      require (tx.maxFeePerGas == 2 * feeBase.getD (if highFee then 10000000000 else 1) +
+        priorityFee) "Signed transaction changed the reviewed maximum fee quote."
       keyReads.modify (· + 1)
       let signerBytes ← unwrap "test sender" <| secp256k1EthereumAddress key
       let actualSender := signerBytes.data.foldl
@@ -100,7 +110,11 @@ private def scenario (invoice : PublicInvoice) (sender : Nat)
   let result ← try
     let _ ← executeWith effects invoice sender readings
     pure true
-  catch _ => pure false
+  catch error =>
+    if let some expected := expectedFailure then
+      require ((error.toString.splitOn expected).length > 1)
+        s!"Expected {expected}, got {error}."
+    pure false
   return (result, ← journal.get, ← sends.get, ← keyReads.get)
 
 def main : IO UInt32 := do
@@ -114,6 +128,14 @@ def main : IO UInt32 := do
   let invoiceText ← unwrap "public invoice" <| invoiceForNote pool commitment
   let invoice ← unwrap "parse public invoice" <| parseInvoice invoiceText .mainnet
   let readings : Readings := ⟨1, pool.amount, 1000000000000000000, 0, 0⟩
+  require (valueGasDivisor pool.amount == 0 &&
+    gasCostLimit pool.amount == 20000000000000000 &&
+    valueGasDivisor (pool.amount - 1) == 0 &&
+    gasCostLimit (pool.amount - 1) == 20000000000000000 &&
+    valueGasDivisor 0 == 0 &&
+    valueGasDivisor (pool.amount + 1) == 10 &&
+    gasCostLimit (pool.amount + 1) == (pool.amount + 1) / 10)
+    "Small ETH deposit fee policy changed at the inclusive 0.01 ETH boundary."
   let steps ← unwrap "ETH invoice plan" <| planInvoice invoice sender readings
   require (steps.size == 1 && steps[0]!.kind == .deposit &&
     steps[0]!.value == pool.amount)
@@ -147,6 +169,35 @@ def main : IO UInt32 := do
   require (confirmed && confirmedSends == 1 && confirmedKeyReads == 1 &&
     (((String.fromUTF8? confirmedJournal).getD "").splitOn "confirmed").length > 1)
     "Exact receipt and Deposit event did not confirm the deposit."
+  let (observed, _, observedSends, observedKeyReads) ←
+    scenario invoice sender key readings false false false false false
+      1156615 (some 0) 1000000000
+  require (1156615 * 120 / 100 + 1 == 1387939 &&
+    1387939 * 1000000000 > pool.amount / 10 &&
+    observed && observedSends == 1 && observedKeyReads == 1)
+    "Observed 0.01 ETH estimate and 1 gwei fee were blocked by the old 10% cap."
+  let some largerPool := poolFor .mainnet "0.1" "ETH"
+    | throw <| IO.userError "Missing larger ETH fixture pool."
+  let largerText ← unwrap "larger public invoice" <| invoiceForNote largerPool commitment
+  let largerInvoice ← unwrap "parse larger invoice" <|
+    parseInvoice largerText .mainnet
+  let largerReadings : Readings :=
+    ⟨1, largerPool.amount, 1000000000000000000, 0, 0⟩
+  let (relativeAccepted, _, relativeSends, relativeKeyReads) ←
+    scenario largerInvoice sender key largerReadings false false false false false
+      1156615 (some 5000000000) 1000000000
+      (some "The quoted maximum gas cost exceeds the safety cap.")
+  require (1387939 * 11000000000 > largerPool.amount / 10 &&
+    1387939 * 11000000000 < 20000000000000000 &&
+    !relativeAccepted && relativeSends == 0 && relativeKeyReads == 0)
+    "A deposit above 0.01 ETH bypassed the retained 10% fee cap."
+  let (absoluteAccepted, _, absoluteSends, absoluteKeyReads) ←
+    scenario invoice sender key readings false false false false false
+      1156615 (some 7000000000) 1000000000
+      (some "The quoted maximum gas cost exceeds the safety cap.")
+  require (1387939 * 15000000000 > 20000000000000000 &&
+    !absoluteAccepted && absoluteSends == 0 && absoluteKeyReads == 0)
+    "A 0.01 ETH deposit bypassed the retained 0.02 ETH absolute cap."
   let (pendingAccepted, _, pendingSends, pendingKeyReads) ←
     scenario invoice sender key readings false false true false false
   require (!pendingAccepted && pendingSends == 0 && pendingKeyReads == 0)
@@ -160,6 +211,12 @@ def main : IO UInt32 := do
     scenario invoice sender key readings false false false false true
   require (!feeAccepted && feeSends == 0 && feeKeyReads == 0)
     "An excessive RPC fee quote reached key read, signing, or broadcast."
+  for estimate in [0, 1666667] do
+    let (gasAccepted, gasJournal, gasSends, gasKeyReads) ←
+      scenario invoice sender key readings false false false false false estimate
+    require (!gasAccepted && gasSends == 0 && gasKeyReads == 0 &&
+      (((String.fromUTF8? gasJournal).getD "").splitOn "planned").length > 1)
+      "A zero or excessive buffered gas estimate reached signing or broadcast."
   let wrongKey ← unwrap "second test key" <|
     parseHexBytes ("0x" ++ String.ofList (List.replicate 63 '0') ++ "2")
   let (mismatchAccepted, _, mismatchSends, mismatchKeyReads) ←

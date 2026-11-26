@@ -22,7 +22,7 @@ inductive Policy where
   deriving Inhabited, BEq
 
 inductive Unavailable where
-  | transport | bundlerInternal
+  | transport | bundlerInternal | validationOnlyEstimator
   deriving Inhabited, BEq
 
 inductive EstimateReply where
@@ -71,12 +71,108 @@ structure Prepared where
   notes : Array NoteProof
   deriving Inhabited
 
-private def checked (value : Except String α) : IO α :=
+private def policyDiagnostic : String → Option String
+  | "Bundler gas prices exceed the host-reference bounds." =>
+      some "Bundler gas prices exceed the local network-price or fee limits. Try again with a fresh quote or use another bundler."
+  | "Paymaster fee quote is zero." =>
+      some "The paymaster returned a zero fee quote; withdrawal preparation stopped."
+  | "Paymaster fee consumes the sponsoring note." =>
+      some "The estimated gas fee exceeds the first note's amount. Use a larger first note or fewer withdrawals."
+  | "Paymaster fee exceeds the configured sponsoring-note limit." =>
+      some "The estimated gas fee exceeds the configured sponsoring-note fee limit."
+  | "Paymaster notes are duplicated or use different assets or chains." =>
+      some "Select distinct notes of the same asset and network."
+  | "Invalid recoverable batch preparation scope." =>
+      some "Batch withdrawal needs multiple notes or contract calls and a valid smart account."
+  | "Invalid direct one-note preparation scope." =>
+      some "Direct withdrawal requires one note and a valid sender and recipient."
+  | "Post-withdrawal calls require the recoverable account as recipient." =>
+      some "Contract calls require the smart account as recipient."
+  | "UserOperation exceeds the reviewed gas or network fee bounds." =>
+      some "Estimated gas or transaction fee exceeds the configured limits."
+  | _ => none
+
+/-- Only fixed, locally selected diagnostics are released. Provider text,
+JSON parse errors and arbitrary Except payloads are never reflected. -/
+private def checkedAt (fallback : String) (value : Except String α) : IO α :=
   match value with
   | .ok result => pure result
-  | .error _ => throw <| IO.userError "Paymaster preparation rejected invalid public data."
+  | .error message => throw <| IO.userError ((policyDiagnostic message).getD fallback)
+
+private def checked (value : Except String α) : IO α :=
+  checkedAt "Paymaster preparation rejected invalid public data." value
 
 private def fail (message : String) : IO α := throw <| IO.userError message
+
+private def diagnosticNat (value : Nat) : String :=
+  if value < 2 ^ 256 then toString value else "at least 2^256"
+
+/-- Only known numeric operation fields and local limits enter these
+diagnostics. Never include a provider's error text, JSON, or unknown fields. -/
+private def gasBoundsDiagnostic (operation : UserOperation) (bounds : Bundler.Bounds) :
+    Option String := Id.run do
+  let fields := #[
+    ("verificationGasLimit", operation.verificationGasLimit, bounds.maxVerificationGas),
+    ("callGasLimit", operation.callGasLimit, bounds.maxCallGas),
+    ("preVerificationGas", operation.preVerificationGas, bounds.maxPreVerificationGas),
+    ("paymasterVerificationGasLimit", operation.paymasterVerificationGasLimit,
+      bounds.maxPaymasterVerificationGas),
+    ("paymasterPostOpGasLimit", operation.paymasterPostOpGasLimit, bounds.maxPostOpGas)]
+  for (name, value, cap) in fields do
+    if value > cap then
+      return some s!"{name} {diagnosticNat value} exceeds limit {diagnosticNat cap} gas."
+  if operation.verificationGasLimit == 0 then
+    return some "verificationGasLimit must be greater than zero."
+  if operation.preVerificationGas == 0 then
+    return some "preVerificationGas must be greater than zero."
+  if operation.maxFeePerGas == 0 then return some "maxFeePerGas must be greater than zero."
+  if operation.maxFeePerGas > bounds.maxFeePerGas then
+    return some s!"maxFeePerGas {diagnosticNat operation.maxFeePerGas} exceeds limit {diagnosticNat bounds.maxFeePerGas} wei per gas."
+  if operation.maxPriorityFeePerGas > operation.maxFeePerGas then
+    return some s!"maxPriorityFeePerGas {diagnosticNat operation.maxPriorityFeePerGas} exceeds maxFeePerGas {diagnosticNat operation.maxFeePerGas} wei per gas."
+  let cost := Bundler.maximumGasCost operation
+  if cost > bounds.maxGasCostWei then
+    return some s!"maximum gas cost {diagnosticNat cost} wei exceeds limit {diagnosticNat bounds.maxGasCostWei} wei."
+  return none
+
+private def validateGas (stage : String) (operation : UserOperation)
+    (bounds : Bundler.Bounds) : IO Unit := do
+  match Bundler.validate operation bounds with
+  | .ok _ => pure ()
+  | .error message =>
+    if message == "UserOperation exceeds the reviewed gas or network fee bounds." then
+      if let some diagnostic := gasBoundsDiagnostic operation bounds then
+        fail s!"{stage}: {diagnostic}"
+    fail "The withdrawal exceeds its supported encoding or gas limits."
+
+/-- Diagnostic-only parsing after the authoritative parser rejected a gas
+bound. This does not admit an estimate or weaken `Bundler.parseEstimate`. -/
+private def estimateForDiagnostic (json : Json) (baseline : UserOperation) :
+    Except String UserOperation := do
+  if json.compress.utf8ByteSize > 4096 then throw "Oversized estimate."
+  let value (key : String) : Except String Nat := do
+    JsonRpc.parseHexQuantity (← (← json.getObjVal? key).getStr?)
+  let optional (key : String) (fallback : Nat) : Except String Nat :=
+    if (json.getObjVal? key).isOk then value key else .ok fallback
+  return { baseline with
+    verificationGasLimit := ← value "verificationGasLimit"
+    callGasLimit := ← value "callGasLimit"
+    preVerificationGas := ← value "preVerificationGas"
+    paymasterVerificationGasLimit := ← optional "paymasterVerificationGasLimit"
+      baseline.paymasterVerificationGasLimit
+    paymasterPostOpGasLimit := ← optional "paymasterPostOpGasLimit"
+      baseline.paymasterPostOpGasLimit }
+
+private def parseGasEstimate (raw : Json) (operation : UserOperation)
+    (bounds : Bundler.Bounds) : IO Bundler.GasEstimate := do
+  match Bundler.parseEstimate raw operation bounds with
+  | .ok estimate => pure estimate
+  | .error message =>
+    if message == "UserOperation exceeds the reviewed gas or network fee bounds." then
+      if let .ok candidate := estimateForDiagnostic raw operation then
+        if let some diagnostic := gasBoundsDiagnostic candidate bounds then
+          fail s!"Bundler gas estimate: {diagnostic}"
+    fail "The bundler returned a malformed gas estimate."
 
 private def field (json : Json) (name : String) : IO Json :=
   checked <| json.getObjVal? name
@@ -137,10 +233,10 @@ def validateInput (input : Input) : Except String Pool := do
       throw "Invalid post-withdrawal execution gas estimate."
   return pool
 
-/-- Exact alpha.38 baseline before bundler refinement. -/
+/-- SDK gas baselines with an allowance for native smart-account deployment. -/
 def baselineGas (input : Input) (erc20 : Bool) (maximum priority : Nat) : Gas := {
   verification := match input.mode with
-    | .batch account .. => if account.deployed then 50000 else 500000
+    | .batch account .. => if account.deployed then 50000 else 1000000
     | .single .. => 50000
   execution := match input.mode with
     | .single .. => 0
@@ -196,13 +292,25 @@ private def readPrice (effects : Effects) (bounds : Bundler.Bounds) : IO (Nat ×
   let maximum ← quantity (← field standard "maxFeePerGas")
   let priority ← quantity (← field standard "maxPriorityFeePerGas")
   let (base, referenceTip) ← priceReference effects
-  let _ ← checked <| checkPrice maximum priority base referenceTip bounds
-  return (maximum, priority)
+  let _ ← checkedAt "The bundler fee quote failed local price checks." <|
+    checkPrice maximum priority base referenceTip bounds
+  -- Very small base fees can move above the few wei left by an otherwise
+  -- valid quote during proving. Add initial headroom inside the same checked
+  -- host/absolute ceilings; the reviewed fee and proofs bind this value.
+  let padded := if base < 1000000 then
+      let tipCap := min 20000000000 (max 2000000000 (referenceTip * 3))
+      min (maximum + 1000000) (min (base * 3 + tipCap) bounds.maxFeePerGas)
+    else maximum
+  let _ ← checkedAt "The bundler fee quote failed local price checks." <|
+    checkPrice padded priority base referenceTip bounds
+  return (padded, priority)
 
 def requestsFor (input : Input) (fee : Nat) : Except String (Array Request) := do
   let pool ← validateInput input
-  if fee == 0 || fee >= pool.amount || fee * 10000 > pool.amount * input.maxFeeBps then
-    throw "Paymaster fee exceeds the reviewed sponsoring-note bound."
+  if fee == 0 then throw "Paymaster fee quote is zero."
+  if fee >= pool.amount then throw "Paymaster fee consumes the sponsoring note."
+  if fee * 10000 > pool.amount * input.maxFeeBps then
+    throw "Paymaster fee exceeds the configured sponsoring-note limit."
   let sponsor ← paymaster input.notes[0]!.chainId
   let recipient := match input.mode with
     | .single _ recipient => recipient
@@ -247,7 +355,7 @@ private def randomizedRequests (effects : Effects) (requests : Array Request) : 
 
 /-- A fixed dummy-only builder deliberately has no proof argument. -/
 def simulationOperation (effects : Effects) (input : Input) (gas : Gas) (fee : Nat) : IO UserOperation := do
-  let requests ← randomizedRequests effects (← checked <| requestsFor input fee)
+  let requests ← randomizedRequests effects (← checkedAt "Could not bind the fee to the selected notes." <| requestsFor input fee)
   let first := requests[0]!
   let sponsor ← checked <| paymaster first.chainId
   let proof ← checked dummyProof
@@ -293,7 +401,7 @@ def simulationOperation (effects : Effects) (input : Input) (gas : Gas) (fee : N
     paymaster := some sponsor
     paymasterData := paymasterData
     signature := signature }
-  let _ ← checked <| Bundler.validate op input.bounds
+  validateGas "Withdrawal gas" op input.bounds
   return op
 
 private def simulationJson (input : Input) (op : UserOperation) : Except String Json := do
@@ -360,11 +468,11 @@ private def quoteFee (effects : Effects) (input : Input) (pool : Pool) (gas : Ga
       let bytes ← data result 32
       if bytes.size != 32 then fail "Token fee quote is not one canonical word."
       pure <| wordNat bytes
-  let _ ← checked <| requestsFor input fee
+  let _ ← checkedAt "Could not bind the fee to the selected notes." <| requestsFor input fee
   return fee
 
 private def assertGas (input : Input) (baseline current : Gas) (operation : UserOperation) : IO Unit := do
-  let _ ← checked <| Bundler.validate operation input.bounds
+  validateGas "Buffered withdrawal gas" operation input.bounds
   let direct := match input.mode with | .single .. => true | _ => false
   let verificationCap := if direct then min 250000 input.bounds.maxVerificationGas
     else min (baseline.verification * 2) input.bounds.maxVerificationGas
@@ -406,11 +514,12 @@ private def freshHead (effects : Effects) (input : Input) : IO Unit := do
   if head < input.checkedBlock || head - input.checkedBlock > input.maxBlockLag then
     fail "Selected-pool public history is outside the allowed block freshness bound."
 
-/-- Finite estimation runs without real proofs or owner signatures. Callback
-errors are sanitized; only explicitly classified transport/internal outages
-can use the conservative direct one-note fallback. -/
+/-- Finite estimation runs without real proofs or owner signatures. The exact
+zero-execution estimator incompatibility automatically uses the bounded direct
+fallback. Other recognized outages still require explicit best-effort policy;
+execution-bearing and batch operations require a successful estimate. -/
 def estimateWith (effects : Effects) (input : Input) : IO Quote := do
-  let pool ← checked <| validateInput input
+  let pool ← checkedAt "Selected notes or withdrawal settings are invalid." <| validateInput input
   freshHead effects input
   effects.validateHistory input.notes
   let (maximum, priority) ← readPrice effects input.bounds
@@ -445,19 +554,35 @@ def estimateWith (effects : Effects) (input : Input) : IO Quote := do
       gas := { gas with execution := min input.bounds.maxCallGas (gas.execution * 2) }
       executionRetries := executionRetries + 1
     | .unavailable reason =>
-      if !direct || input.policy != .bestEffort || executionRetries != 0 then
+      let allowed := if reason == .validationOnlyEstimator then
+          gas.execution == 0 && operation.callGasLimit == 0 && operation.callData.isEmpty
+        else input.policy == .bestEffort
+      if !direct || executionRetries != 0 || !allowed then
+        if reason == .validationOnlyEstimator then
+          fail "The bundler's zero-execution estimator workaround cannot be used for this withdrawal. Batch withdrawals and execution calls require a successful estimate; preparation stopped before real proofs."
         fail "Required gas estimation is unavailable; preparation stopped."
       let fallback := fallbackGas gas pool.asset.token.isSome operation
       let finalFee ← feeFor fallback
       let fallbackOperation ← simulationOperation effects input fallback finalFee
       assertGas input baseline fallback fallbackOperation
-      let requests ← checked <| requestsFor input finalFee
+      let requests ← checkedAt "Could not bind the final fee to the selected notes." <| requestsFor input finalFee
       return { input, gas := fallback, fee := finalFee, requests, estimation := .fallback reason }
     | .estimated raw =>
-      let estimate ← checked <| Bundler.parseEstimate raw operation input.bounds
-      let next := refineGas gas estimate direct
+      let estimate ← parseGasEstimate raw operation input.bounds
+      -- The transport parser retains current optional limits when omitted.
+      -- They are floors, not fresh measurements to buffer again each round.
+      -- Match the SDK's absent-as-zero refinement without changing the shared
+      -- parser's existing contract for other callers.
+      let measured := { estimate with
+        paymasterVerificationGasLimit :=
+          if (raw.getObjVal? "paymasterVerificationGasLimit").isOk then
+            estimate.paymasterVerificationGasLimit else 0
+        paymasterPostOpGasLimit :=
+          if (raw.getObjVal? "paymasterPostOpGasLimit").isOk then
+            estimate.paymasterPostOpGasLimit else 0 }
+      let next := refineGas gas measured direct
       if sameGas gas next then
-        let requests ← checked <| requestsFor input fee
+        let requests ← checkedAt "Could not bind the final fee to the selected notes." <| requestsFor input fee
         return { input, gas, fee, requests, estimation := .estimated }
       let nextOperation := { operation with
         verificationGasLimit := next.verification, callGasLimit := next.execution,
@@ -479,7 +604,8 @@ def prepareWith (effects : Effects) (input : Input) : IO Prepared := do
   let notes ← quote.requests.mapM fun request => do
     let result ← try effects.prove request catch _ =>
       fail "Native proof worker failed after gas preparation."
-    let _ ← checked <| ProverWorkerClient.acceptResponse request result
+    let _ ← checkedAt "The generated withdrawal proof failed local verification; nothing was submitted." <|
+      ProverWorkerClient.acceptResponse request result
     return ({ request, result } : NoteProof)
   return { quote, notes }
 

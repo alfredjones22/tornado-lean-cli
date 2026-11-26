@@ -1,7 +1,7 @@
 # Native selected-pool history bootstrap
 
 [`SelectedPoolBootstrap.lean`](../Tornado/Protocol/SelectedPoolBootstrap.lean)
-contains the 29 pools supported by the frozen CLI catalog. Each row captures
+contains the 29 pools supported by the pinned native CLI catalog. Each row captures
 the chain, numeric pool address, denomination, token address, and the pool's
 `registeredBlock` from `history-bootstrap.json` and `fromBlock` from
 `history-manifest.json`. The two blocks agree for every supported pool. Four
@@ -18,10 +18,9 @@ fail closed. Runtime lookup uses only native Lean constants and parsing.
 
 ## Source provenance
 
-The source is clean `tornado-cli-new-era` commit
-`daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7`. The module pins SHA-256 of
-the TypeScript catalog and both JSON sources. Run the development-only checker
-from this repo:
+The module pins SHA-256 of the upstream catalog and both JSON sources. The
+development-only checker records and authenticates their exact source identity.
+Run it from this repository:
 
 ```sh
 python3 scripts/check_selected_pool_bootstrap.py

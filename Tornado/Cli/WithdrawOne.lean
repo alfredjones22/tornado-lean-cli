@@ -41,6 +41,7 @@ private structure Options where
   dryRun : Bool := false
   preflight : Bool := false
   yes : Bool := false
+  nonInteractive : Bool := false
   showHelp : Bool := false
   deriving Inhabited
 
@@ -53,6 +54,7 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--preflight" :: rest => parseOptions rest { options with preflight := true }
   | "--retry-rejected" :: rest => parseOptions rest { options with retryRejected := true }
   | "--yes" :: rest => parseOptions rest { options with yes := true }
+  | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
   | "--note-file" :: value :: rest => parseOptions rest { options with noteFile := some value }
   | "--recipient" :: value :: rest => parseOptions rest { options with recipient := some value }
   | "--note-index" :: value :: rest => parseOptions rest { options with noteIndex := some value }

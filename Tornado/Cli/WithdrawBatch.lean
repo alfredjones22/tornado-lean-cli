@@ -39,9 +39,12 @@ private structure Options where
   bundler : Option String := none
   simulationRpc : Option String := none
   assetsDir : Option String := none
+  cacheDir : Option String := none
+  provingRoot : Option String := none
   statusDir : String := "."
   dryRun : Bool := false
   yes : Bool := false
+  nonInteractive : Bool := false
   showHelp : Bool := false
   deriving Inhabited
 
@@ -52,27 +55,37 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "-h" :: _ | "--help" :: _ => .ok { options with showHelp := true }
   | "--dry-run" :: rest => parseOptions rest { options with dryRun := true }
   | "--yes" :: rest => parseOptions rest { options with yes := true }
-  | "--notes-file" :: value :: rest => parseOptions rest { options with notesFile := some value }
+  | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
+  | "--notes-file" :: value :: rest | "--note-file" :: value :: rest =>
+    parseOptions rest { options with notesFile := some value }
   | "--owner-key-file" :: value :: rest => parseOptions rest { options with ownerKeyFile := some value }
-  | "--receiver" :: value :: rest => parseOptions rest { options with receiver := some value }
+  | "--receiver" :: value :: rest | "--recipient" :: value :: rest =>
+    parseOptions rest { options with receiver := some value }
   | "--contract-calls" :: value :: rest => parseOptions rest { options with contractCalls := some value }
   | "--chain" :: value :: rest => parseOptions rest { options with chain := value }
   | "--rpc" :: value :: rest => parseOptions rest { options with rpc := some value }
   | "--bundler-url" :: value :: rest => parseOptions rest { options with bundler := some value }
   | "--simulation-rpc" :: value :: rest => parseOptions rest { options with simulationRpc := some value }
   | "--assets-dir" :: value :: rest => parseOptions rest { options with assetsDir := some value }
+  | "--history-cache-dir" :: value :: rest => parseOptions rest { options with cacheDir := some value }
+  | "--proving-assets-root" :: value :: rest => parseOptions rest { options with provingRoot := some value }
   | "--status-dir" :: value :: rest => parseOptions rest { options with statusDir := value }
-  | ["--notes-file"] | ["--owner-key-file"] | ["--receiver"] |
+  | ["--notes-file"] | ["--note-file"] | ["--owner-key-file"] | ["--receiver"] | ["--recipient"] |
     ["--contract-calls"] | ["--chain"] | ["--rpc"] |
     ["--bundler-url"] | ["--simulation-rpc"] | ["--assets-dir"] |
+    ["--history-cache-dir"] | ["--proving-assets-root"] |
     ["--status-dir"] => .error "Batch withdrawal option is missing its value."
   | argument :: rest =>
     if argument.startsWith "--notes-file=" then
       parseOptions rest { options with notesFile := some (String.ofList (argument.toList.drop 13)) }
+    else if argument.startsWith "--note-file=" then
+      parseOptions rest { options with notesFile := some (String.ofList (argument.toList.drop 12)) }
     else if argument.startsWith "--owner-key-file=" then
       parseOptions rest { options with ownerKeyFile := some (String.ofList (argument.toList.drop 17)) }
     else if argument.startsWith "--receiver=" then
       parseOptions rest { options with receiver := some (String.ofList (argument.toList.drop 11)) }
+    else if argument.startsWith "--recipient=" then
+      parseOptions rest { options with receiver := some (String.ofList (argument.toList.drop 12)) }
     else if argument.startsWith "--contract-calls=" then
       parseOptions rest { options with contractCalls := some (String.ofList (argument.toList.drop 17)) }
     else if argument.startsWith "--chain=" then
@@ -85,13 +98,21 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
       parseOptions rest { options with simulationRpc := some (String.ofList (argument.toList.drop 17)) }
     else if argument.startsWith "--assets-dir=" then
       parseOptions rest { options with assetsDir := some (String.ofList (argument.toList.drop 13)) }
+    else if argument.startsWith "--history-cache-dir=" then
+      parseOptions rest { options with cacheDir := some (String.ofList (argument.toList.drop 20)) }
+    else if argument.startsWith "--proving-assets-root=" then
+      parseOptions rest { options with provingRoot := some (String.ofList (argument.toList.drop 22)) }
     else if argument.startsWith "--status-dir=" then
       parseOptions rest { options with statusDir := String.ofList (argument.toList.drop 13) }
     else .error s!"error: unknown option '{argument}'"
 
 private def help : String :=
-  "Usage: tornado withdraw batch --notes-file <path> --owner-key-file <path> --dry-run [options]\n\n" ++
+  "Usage: tornado withdraw batch --notes-file <path> [--owner-key-file <path>] --dry-run [options]\n\n" ++
   "Review 1–12 same-asset notes, the pinned smart account, receiver and ordered calls.\n" ++
+  "--note-file is an alias for --notes-file; --recipient is an alias for --receiver.\n" ++
+  "Without contract calls, proceeds are forwarded to the selected receiver (default: smart account).\n" ++
+  "--non-interactive accepts unattended review and requires --owner-key-file.\n" ++
+  "--assets-dir, --history-cache-dir and --proving-assets-root are accepted for live-command consistency; dry-run does not load history or proving assets.\n" ++
   "One note requires at least one contract call; otherwise select 2–12 notes.\n" ++
   "No proof, fee quote, signature or UserOperation is created.\n"
 
@@ -326,8 +347,9 @@ def withdrawBatchCommand (args : List String) : IO String := do
     fail "Native batch withdrawal signing and submission are disabled; use --dry-run."
   let some notesFile := options.notesFile
     | fail "error: required option '--notes-file <path>' not specified"
-  let some keyFile := options.ownerKeyFile
-    | fail "error: required option '--owner-key-file <path>' not specified"
+  if options.nonInteractive && options.ownerKeyFile.isNone then
+    fail "--non-interactive requires --owner-key-file for batch withdrawals."
+  let keyFile ← NativeSigner.resolveKeyFile options.ownerKeyFile
   let chain ← checked (parseChainInput options.chain)
   let environmentRpc ← IO.getEnv "TORNADO_RPC_URL"
   let rpc ← checked (checkedEndpoint

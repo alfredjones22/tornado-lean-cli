@@ -86,8 +86,8 @@ directory. Separate copies or deleted journals are not globally coordinated.
 
 The machine's `submitted` result means that the bundler acknowledged the
 expected operation hash. It does not mean the withdrawal succeeded. The outer
-runner still requires matching receipt and pool/EntryPoint events, and waits
-for twelve observed confirmations before releasing its owner lock. Those
+runner still requires matching receipt and pool/EntryPoint events, and rechecks
+one observed inclusion before releasing its owner lock. Those
 checks do not authenticate Ethereum consensus or prove finality.
 
 ## Secret handling and allowed disclosures
@@ -173,7 +173,7 @@ cannot bypass a local acceptance rule merely by returning unexpected JSON.
 An internally consistent invented chain can still pass these checks.
 Ethereum state, inclusion and finality are not authenticated against a
 locally verified consensus root. TLS authenticates the configured server,
-not its chain claims. Twelve RPC-observed confirmations are a depth policy.
+not its chain claims. One RPC-observed inclusion is not consensus finality and can be reorganized.
 Provider completeness, the selected deployed contracts, cryptographic
 security and physical storage behavior remain assumptions. A provider can
 also deny service, delay a withdrawal or cause safe rejection; there is no

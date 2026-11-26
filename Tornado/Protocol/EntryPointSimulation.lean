@@ -35,8 +35,8 @@ def gasLimit (op : UserOperation) : Nat :=
   op.verificationGasLimit + op.callGasLimit + op.preVerificationGas +
     op.paymasterVerificationGasLimit + op.paymasterPostOpGasLimit + 1000000
 
-def requestParams (op : UserOperation) : Except String (Array Json) := do
-  Bundler.validate op
+def requestParams (op : UserOperation) (bounds : Bundler.Bounds := {}) : Except String (Array Json) := do
+  Bundler.validate op bounds
   if op.signature.size != 65 || op.authorizationAddress.isSome then
     throw "Signed account simulation requires a final SimpleAccount operation."
   let simulatorAddress ← Bundler.address simulator

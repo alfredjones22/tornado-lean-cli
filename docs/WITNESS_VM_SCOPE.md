@@ -2,8 +2,8 @@
 
 [`WitnessVM.lean`](../Tornado/Protocol/WitnessVM.lean) evaluates all **36,528
 signals** and materializes all **28,300 R1CS variables** of the pinned Classic
-Tornado `Withdraw(20)` circuit in native Lean. It does not execute JavaScript,
-call the TypeScript CLI, or copy witness values from the test fixture. It takes
+Tornado `Withdraw(20)` circuit in native Lean. Runtime witness generation
+neither executes external scripts nor copies witness values from a fixture. It takes
 the existing checked 49-slot input prefix, a native note commitment, and a
 typed arithmetic graph. It executes the two `Num2Bits(248)` components, five
 Pedersen segments, 2,234 typed point/mux/square operations, 20 Merkle

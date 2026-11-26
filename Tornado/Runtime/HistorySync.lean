@@ -38,6 +38,7 @@ structure Transport where
   sagaChunk : Segment → IO ByteArray
   rpc : Nat → JsonRpc.Method → Array Json → IO String
   nowMs : IO Nat
+  progress : String → IO Unit := fun _ => pure ()
 
 structure Budget where
   transport : Transport
@@ -59,6 +60,12 @@ private def checked (value : Except String α) : IO α :=
   match value with
   | .ok result => pure result
   | .error message => fail message
+
+private def checkedRpc (value : Except String α) : IO α :=
+  match value with
+  | .ok result => pure result
+  | .error _ =>
+    fail "Pool-history RPC returned invalid or unavailable data. Try another RPC with historical state support."
 
 private def newBudget (transport : Transport) : IO Budget := do
   return { transport, startedMs := ← transport.nowMs,
@@ -106,8 +113,24 @@ private def optionalRpc (budget : Budget) (method : JsonRpc.Method)
 private def requiredRpc (budget : Budget) (method : JsonRpc.Method)
     (params : Array Json) : IO (Nat × String) := do
   let some response ← optionalRpc budget method params
-    | fail "Pool-history RPC request failed."
+    | fail "Pool-history RPC request failed. Try another RPC with historical state support."
   return response
+
+/-- Only an unavailable *historical checkpoint request* is optional. File
+    authentication, malformed replies, chain checks, and budget failures are
+    never caught here. Remote error text is not exposed to the terminal. -/
+private def checkpointRpc (budget : Budget) (method : JsonRpc.Method)
+    (params : Array Json) : IO (Option Json) := do
+  let some (id, raw) ← optionalRpc budget method params | return none
+  match JsonRpc.parseReply id raw with
+  | .error _ => fail "Pool-history checkpoint RPC returned a malformed response."
+  | .ok (.failure _ _ _) => return none
+  | .ok (.success value) => return some value
+
+private def checkpointUnavailable (budget : Budget) : IO Bool := do
+  budget.transport.progress
+    "This RPC cannot verify the saved history checkpoint; rebuilding pool history. This may take a few minutes."
+  return false
 
 private def quantityHex (value : Nat) : String :=
   "0x" ++ String.ofList (Nat.toDigits 16 value)
@@ -139,24 +162,24 @@ private def poolCallParams (pool : Nat) (signature : String) (block : Nat) :
 private def poolClaims (budget : Budget) (selection : Selection) (block : Nat) :
     IO (Nat × Nat) := do
   let (chainId, chainRaw) ← requiredRpc budget .chainId #[]
-  let chain ← checked <| JsonRpc.parseQuantityResult chainId chainRaw
+  let chain ← checkedRpc <| JsonRpc.parseQuantityResult chainId chainRaw
   if chain != selection.chainId then fail "Pool-history RPC chain changed."
   let (countId, countRaw) ← requiredRpc budget .call
     (poolCallParams selection.pool "nextIndex()" block)
-  let count ← checked <| abiWord (← checked <| JsonRpc.parseResult countId countRaw)
+  let count ← checkedRpc <| abiWord (← checkedRpc <| JsonRpc.parseResult countId countRaw)
   if count ≥ 2 ^ 32 then fail "Pool nextIndex is not uint32."
   let (rootId, rootRaw) ← requiredRpc budget .call
     (poolCallParams selection.pool "getLastRoot()" block)
-  let root ← checked <| abiWord (← checked <| JsonRpc.parseResult rootId rootRaw)
+  let root ← checkedRpc <| abiWord (← checkedRpc <| JsonRpc.parseResult rootId rootRaw)
   return (count, root)
 
 private def captureSelection (budget : Budget) (prior : State) : IO Selection := do
   let _ ← checked (validateState prior)
   let (chainId, chainRaw) ← requiredRpc budget .chainId #[]
-  let chain ← checked <| JsonRpc.parseQuantityResult chainId chainRaw
+  let chain ← checkedRpc <| JsonRpc.parseQuantityResult chainId chainRaw
   if chain != prior.chainId then fail "Selected pool RPC is on another chain."
   let (headId, headRaw) ← requiredRpc budget .blockNumber #[]
-  let head ← checked <| JsonRpc.parseQuantityResult headId headRaw
+  let head ← checkedRpc <| JsonRpc.parseQuantityResult headId headRaw
   if head < prior.lastSyncedBlock || head < prior.registeredBlock then
     fail "Pool-history RPC head precedes the saved pool cursor or registration."
   return { chainId := prior.chainId, pool := prior.pool,
@@ -216,7 +239,7 @@ private def fetchRange (budget : Budget) (selection : Selection)
     (fromBlock toBlock fuel : Nat) : IO (Array CheckedSlice) := do
   let params ← checked (RpcHistory.requestParams selection fromBlock toBlock)
   let (chainId, chainRaw) ← requiredRpc budget .chainId #[]
-  let chain ← checked <| JsonRpc.parseQuantityResult chainId chainRaw
+  let chain ← checkedRpc <| JsonRpc.parseQuantityResult chainId chainRaw
   if chain != selection.chainId then fail "Pool-history RPC chain changed."
   let logs? ← optionalRpc budget .getLogs params
   let slice? ← match logs? with
@@ -227,7 +250,7 @@ private def fetchRange (budget : Budget) (selection : Selection)
         if rangeRejection message then pure none
         else fail "Pool-history RPC rejected log request."
       | .ok _ =>
-        let slice ← checked <| RpcHistory.parseRange selection fromBlock toBlock
+        let slice ← checkedRpc <| RpcHistory.parseRange selection fromBlock toBlock
           chainId logsId chainRaw logsRaw
         pure (some slice)
   if let some slice := slice? then return #[slice]
@@ -260,9 +283,9 @@ def combineSlices (fromBlock head : Nat) (slices : Array CheckedSlice) :
 
 private def scanRpc (budget : Budget) (selection : Selection)
     (fromBlock : Nat) : IO (CheckedSlice × Nat) := do
-  if fromBlock > selection.head ||
-      selection.head - fromBlock + 1 > maxRpcScanBlocks then
-    fail "Pool-history RPC scan is empty or exceeds the bounded block window."
+  if fromBlock > selection.head then fail "Pool-history RPC scan range is empty."
+  if selection.head - fromBlock + 1 > maxRpcScanBlocks then
+    fail "Pool history exceeds the bounded RPC replay window. Use --rpc with an archive endpoint that can validate the bundled checkpoint."
   let mut cursor := fromBlock
   let mut slices : Array CheckedSlice := #[]
   while cursor ≤ selection.head do
@@ -338,35 +361,88 @@ def syncSelectedPool (transport : Transport) (prior : State)
 private def blockHash (budget : Budget) (number : Nat) : IO ByteArray := do
   let (id, raw) ← requiredRpc budget .getBlockByNumber
     #[toJson (quantityHex number), toJson false]
-  let json ← checked <| JsonRpc.parseResult id raw
+  let json ← checkedRpc <| JsonRpc.parseResult id raw
   if json == .null then fail "Pool-history checkpoint block is unavailable."
-  let reported ← checked <| JsonRpc.parseHexQuantity
-    (← checked <| (← checked <| json.getObjVal? "number").getStr?)
-  let hash ← checked <| parseHexBytes
-    (← checked <| (← checked <| json.getObjVal? "hash").getStr?)
+  let reported ← checkedRpc <| JsonRpc.parseHexQuantity
+    (← checkedRpc <| (← checkedRpc <| json.getObjVal? "number").getStr?)
+  let hash ← checkedRpc <| parseHexBytes
+    (← checkedRpc <| (← checkedRpc <| json.getObjVal? "hash").getStr?)
   if reported != number || hash.size != 32 then
     fail "Pool-history checkpoint block is malformed."
   return hash
 
+/-- A long initial sync gets one opportunity to include blocks that appeared
+    while it ran. The original run's budget and finality cursor are retained;
+    this scans an exact append, not the historical overlap or a new replay. -/
+private def appendNewHead (budget : Budget) (initial : Result)
+    (initialHeadHash : ByteArray) : IO (Result × ByteArray) := do
+  if (← blockHash budget initial.capturedHead) != initialHeadHash then
+    fail "The chain changed during cached pool-history synchronization."
+  let selection ← captureSelection budget initial.state
+  if selection.head == initial.capturedHead then
+    if (← blockHash budget initial.capturedHead) != initialHeadHash then
+      fail "The chain changed during cached pool-history synchronization."
+    return (initial, initialHeadHash)
+  let nextHeadHash ← blockHash budget selection.head
+  let (slice, count) ← scanRpc budget selection (initial.capturedHead + 1)
+  let (leafCount, root) ← poolClaims budget selection selection.head
+  let state ← checked <| HistoryReducer.applyRpc initial.state selection slice
+    (initial.state.finalizedBlock.getD 0) selection.head leafCount root
+  if state.finalizedBlock != initial.state.finalizedBlock then
+    fail "Appending pool history changed its saved finality cursor."
+  let state ← checked <| acceptComplete selection state
+  if (← blockHash budget initial.capturedHead) != initialHeadHash ||
+      (← blockHash budget selection.head) != nextHeadHash then
+    fail "The chain changed during pool-history catch-up."
+  checkDeadline budget
+  let result : Result := { initial with
+    state := state
+    capturedHead := selection.head
+    rpcSlices := initial.rpcSlices + count }
+  return (result, nextHeadHash)
+
 /-- A cache is never admitted on its own cursor claim: recompute its deposit
     root, compare count/root at that exact block, and compare a native cache's
-    saved block hash. Reorged checkpoints are discarded and fully rebuilt. -/
+    saved block hash. Reorged or unavailable checkpoints are discarded and
+    fully rebuilt; unavailable old state never bypasses current-head checks. -/
 private def checkpointMatches (budget : Budget) (selection : Selection)
     (state : State) (expectedHash : Option ByteArray) : IO Bool := do
   if state.chainId != selection.chainId || state.pool != selection.pool ||
       state.registeredBlock != selection.registeredBlock ||
       state.lastSyncedBlock > selection.head then return false
   let some expectedRoot := state.verifiedRoot | return false
-  let (count, root) ← poolClaims budget selection state.lastSyncedBlock
+  let (chainId, chainRaw) ← requiredRpc budget .chainId #[]
+  let chain ← checkedRpc <| JsonRpc.parseQuantityResult chainId chainRaw
+  if chain != selection.chainId then fail "Pool-history RPC chain changed."
+  let some countJson ← checkpointRpc budget .call
+      (poolCallParams selection.pool "nextIndex()" state.lastSyncedBlock)
+    | checkpointUnavailable budget
+  let count ← checkedRpc <| abiWord countJson
+  if count ≥ 2 ^ 32 then fail "Pool nextIndex is not uint32."
+  let some rootJson ← checkpointRpc budget .call
+      (poolCallParams selection.pool "getLastRoot()" state.lastSyncedBlock)
+    | checkpointUnavailable budget
+  let root ← checkedRpc <| abiWord rootJson
   if count != state.deposits.size || root != expectedRoot then return false
   if let some hash := expectedHash then
-    if (← blockHash budget state.lastSyncedBlock) != hash then return false
+    let some block ← checkpointRpc budget .getBlockByNumber
+        #[toJson (quantityHex state.lastSyncedBlock), toJson false]
+      | return ← checkpointUnavailable budget
+    if block == .null then return ← checkpointUnavailable budget
+    let reported ← checkedRpc <| JsonRpc.parseHexQuantity
+      (← checkedRpc <| (← checkedRpc <| block.getObjVal? "number").getStr?)
+    let actualHash ← checkedRpc <| parseHexBytes
+      (← checkedRpc <| (← checkedRpc <| block.getObjVal? "hash").getStr?)
+    if reported != state.lastSyncedBlock || actualHash.size != 32 then
+      fail "Pool-history checkpoint block is malformed."
+    if actualHash != hash then return false
   return true
 
 /-- Optional pinned asset import and protected native snapshot persistence.
     A malformed present cache or pinned asset fails closed. A structurally
-    valid checkpoint that disagrees with current RPC claims is discarded;
-    fresh history is replayed instead. RPC truth/finality remain assumptions.
+    valid checkpoint that disagrees with current RPC claims, or whose old
+    state the RPC cannot serve, is discarded; fresh history is replayed
+    instead. RPC truth/finality remain assumptions.
     The cache directory must already be owner-only mode 0700. -/
 def syncSelectedPoolWithAssets (transport : Transport) (fresh : State)
     (assetsDir : Option String := none) (cacheDir : Option String := none)
@@ -393,13 +469,12 @@ def syncSelectedPoolWithAssets (transport : Transport) (fresh : State)
       if let some pinned ← HistorySnapshot.loadPinned directory fresh.chainId fresh.pool then
         if ← checkpointMatches budget selection pinned none then
           prior := pinned
-  let result ← syncWithBudget budget prior useSaga (some { selection with
+  let initial ← syncWithBudget budget prior useSaga (some { selection with
     lastSyncedBlock := prior.lastSyncedBlock, finalizedBlock := prior.finalizedBlock })
-  if (← blockHash budget result.capturedHead) != initialHeadHash then
-    fail "The chain changed during cached pool-history synchronization."
+  let (result, finalHeadHash) ← appendNewHead budget initial initialHeadHash
   checkDeadline budget
   if let some directory := cacheDir then
-    HistorySnapshot.saveCache directory cached result.state initialHeadHash
+    HistorySnapshot.saveCache directory cached result.state finalHeadHash
   return result
 
 private def sagaBase (chainId : Nat) : Except String String :=
@@ -420,7 +495,8 @@ def liveTransport (chainId : Nat) (rpcUrl : String) : Except String Transport :=
              let some raw := String.fromUTF8? response
                | fail "Pool-history RPC returned non-UTF-8 bytes."
              return raw,
-           nowMs := IO.monoMsNow }
+           nowMs := IO.monoMsNow,
+           progress := IO.eprintln }
 
 def syncSelectedPoolLive (prior : State) (rpcUrl : String)
     (useSaga : Bool := true) : IO Result := do

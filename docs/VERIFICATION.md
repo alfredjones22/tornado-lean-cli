@@ -62,16 +62,19 @@ node scripts/verify.mjs
 The full gate builds executable/test targets, checks native boundaries and
 independent fixture oracles, inspects every theorem, runs focused and full-size
 public proof fixtures, runs mathematical and local EVM regressions, checks
-synthetic provenance/integrity failures, and compares the supported CLI surface
-with the pinned TypeScript oracle. Mathematical checks include complete native transforms, both group/MSM
+synthetic provenance/integrity failures, and checks catalog/planner/note-file
+outputs against pinned independent regression references. These are finite
+checks, not an obligation to reproduce another CLI's behavior. Mathematical checks include complete native transforms, both group/MSM
 constructions, assembly, pairing and source-level worker-output results.
 The public witness certificate is regenerated and checked against every R1CS
 row; the independent point schedule and structural mutations are also tested. It writes `reports/verify.json`
 with `PASS_WITH_LIMITATIONS` only after every required check passes.
 
-The source checkout for the TypeScript oracle, pinned local Solidity checkout,
-Foundry and cached compiler versions must be available as specified by the
-corresponding test scripts. Full native proof/key checks can take several
+The development-only reference checkout identified by `scripts/oracle-identity.mjs`,
+the pinned local Solidity checkout, Foundry and cached compiler versions must
+be available as specified by the corresponding test scripts. Historical
+reference hashes remain in the fixture manifests for reproducibility; they
+do not define the CLI's current specification. Full native proof/key checks can take several
 minutes each. No real funded transaction is part of this gate.
 
 ## Interpreting evidence

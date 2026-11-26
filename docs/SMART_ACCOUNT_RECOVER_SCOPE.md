@@ -8,14 +8,24 @@ connects protected signing, journaling and exact confirmation.
 ```text
 smart-account recover --owner <EOA address> --dry-run
 smart-account recover --owner-key-file <path> --dry-run
-smart-account recover --owner-key-file <path> --experimental-send --journal <new-path>
+smart-account recover [--owner-key-file <path>] --broadcast --journal <new-path>
   [--owner <expected EOA>] [--receiver <address>] [--chain <1|11155111>] [--rpc <URL>]
+  [--non-interactive]
 ```
 
 The receiver defaults to the owner and the chain defaults to mainnet. Live mode
-requires typed `RECOVER` approval and rejects `--yes`. Protected owner-address
+requires typed `RECOVER` approval by default and rejects `--yes`. Run
+`--dry-run` first. Explicit `--non-interactive` skips the confirmation and
+requires a protected `--owner-key-file` for broadcasting. It still prints
+the review and retains validation, fee bounds, revalidation, protected
+journals, reservations and uncertain-outcome handling; the flag alone does
+not enable sending. A non-interactive dry-run can use public `--owner`
+without a key. Protected owner-address
 derivation and signing occur inside the native libsecp256k1 boundary; key bytes
-do not enter Lean. Dry-run creates no journal, signature or submission.
+do not enter Lean. Omitting the key-file option opens a hidden terminal prompt;
+dry-run with a public `--owner` needs no private key. Dry-run creates no journal,
+signature or submission. Interactive broadcast reservations are beside the
+journal; file-based reservations remain beside the key file.
 
 The review checks the RPC chain, captures one block, and uses that block for
 code, storage, balances and calls. It checks pinned factory/implementation
@@ -25,7 +35,7 @@ ETH/ERC-20 sweeps and optional EntryPoint-deposit withdrawal are encoded in
 exact order. Undeployed/empty accounts, self-recipients and mismatched identity
 fail closed. Unsupported assets require separate owner-authorized actions.
 
-After approval the adapter reloads the protected key identity and rechecks the
+After approval the adapter re-derives the native signing identity and rechecks the
 account, balances and exact recovery calls. The candidate must be a zero-value
 type-2 owner transaction to that account with exactly the reviewed calldata,
 empty access list, selected chain and bounded nonce/gas/fees. A new protected
@@ -35,7 +45,7 @@ after signing starts retain it; there is no automatic replacement or resend.
 
 An exact indexed transaction and receipt must agree on hash, sender,
 destination, calldata, type, zero value, chain and block inclusion. The send
-adapter waits for twelve observed confirmations before releasing the lock;
+adapter rechecks one observed inclusion before releasing the lock;
 standalone `smart-account status` reconciles observed inclusion without proving
 finality. Journal updates use protected byte-for-byte compare-and-replace.
 Unknown outcomes preserve evidence and require reconciliation.

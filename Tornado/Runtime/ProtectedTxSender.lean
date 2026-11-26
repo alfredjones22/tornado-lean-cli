@@ -1,4 +1,5 @@
 import Lean
+import Tornado.Domain.Amount
 import Tornado.Protocol.RpcReceipt
 import Tornado.Protocol.TypedTransactionDecode
 import Tornado.Runtime.HttpTransport
@@ -125,13 +126,14 @@ def prepare (effects : Effects) (chainId sender : Nat) (call : Call)
   let estimate ← rpcQuantity (← effects.rpc 104 .estimateGas #[request])
   let gas := estimate * 120 / 100 + 1
   if estimate == 0 || gas > bounds.maxGas then
-    throw <| IO.userError "Gas estimate exceeds the selected transaction bound."
+    throw <| IO.userError s!"Gas estimate {estimate} (buffered: {gas}) is zero or exceeds the selected transaction bound of {bounds.maxGas}."
   let (priority, maximum) ← feeQuote effects
   let gasCost := gas * maximum
-  if gasCost > bounds.maxGasCostWei ||
-      (call.value > 0 && bounds.valueGasDivisor > 0 &&
-        gasCost > call.value / bounds.valueGasDivisor) then
-    throw <| IO.userError "Maximum transaction gas cost exceeds the reviewed bound."
+  let costLimit := if call.value > 0 && bounds.valueGasDivisor > 0 then
+    min bounds.maxGasCostWei (call.value / bounds.valueGasDivisor)
+    else bounds.maxGasCostWei
+  if gasCost > costLimit then
+    throw <| IO.userError s!"Maximum transaction gas cost {formatUnitsExact gasCost 18} ETH ({gasCost} wei) exceeds the reviewed bound of {formatUnitsExact costLimit 18} ETH ({costLimit} wei)."
   let balance ← rpcQuantity (← effects.rpc 105 .getBalance
     #[toJson senderText, toJson ("pending" : String)])
   if balance < call.value + gasCost then
@@ -218,20 +220,25 @@ def sendWith (effects : Effects) (chainId sender : Nat) (call : Call)
       try effects.recordUnknown signed.transactionHash catch _ => pure ()
     throw <| IO.userError s!"Transaction outcome requires reconciliation for {hex signed.transactionHash}; no replacement was signed."
 
-/-- Twelve-block receipt stability check used by live adapters. RPC truth
-and eventual Ethereum finality remain caller assumptions. -/
-def waitReceiptDepth (rpc : String) (original : RpcReceipt.Receipt) : IO Unit := do
+/-- Bounded receipt stability check. One confirmation means inclusion in the
+    current numbered chain, with the same exact receipt and block rechecked.
+    RPC truth and eventual Ethereum finality remain caller assumptions. -/
+def waitReceiptDepthWith
+    (fetch : Nat → JsonRpc.Method → Array Json → IO Json) (pause : IO Unit)
+    (original : RpcReceipt.Receipt) (confirmations : Nat := 1) : IO Unit := do
+  if confirmations == 0 || confirmations > 180 then
+    throw <| IO.userError "Confirmation depth must be between one and 180."
   for attempt in [0:180] do
     let id := 8000 + attempt * 3
-    let head ← rpcQuantity (← HttpTransport.call rpc id .blockNumber #[])
-    if head >= original.blockNumber + 11 then
-      let block ← HttpTransport.call rpc (id + 1) .getBlockByNumber
+    let head ← rpcQuantity (← fetch id .blockNumber #[])
+    if head >= original.blockNumber + (confirmations - 1) then
+      let block ← fetch (id + 1) .getBlockByNumber
         #[toJson (quantity original.blockNumber), toJson false]
       if (← fieldQuantity block "number") != original.blockNumber ||
           (← bytesField block "hash" 32) != original.blockHash then
         throw <| IO.userError "Transaction block changed during confirmation wait."
       let latest ← checked <| RpcReceipt.parseReceipt
-        (← HttpTransport.call rpc (id + 2) .getTransactionReceipt
+        (← fetch (id + 2) .getTransactionReceipt
           #[toJson (hex original.transactionHash)]) original.transactionHash
       if latest.blockHash != original.blockHash ||
           latest.blockNumber != original.blockNumber ||
@@ -240,7 +247,16 @@ def waitReceiptDepth (rpc : String) (original : RpcReceipt.Receipt) : IO Unit :=
           latest.success != original.success then
         throw <| IO.userError "Transaction receipt changed during confirmation wait."
       return
-    IO.sleep 2000
-  throw <| IO.userError "Twelve confirmations were not observed."
+    pause
+  throw <| IO.userError s!"Requested confirmation depth ({confirmations}) was not observed."
+
+/-- All senders advance after one validated inclusion, without waiting for
+    later blocks. The exact original block and receipt are still rechecked. -/
+def waitReceiptDepth (rpc : String) (original : RpcReceipt.Receipt) : IO Unit :=
+  waitReceiptDepthWith (HttpTransport.call rpc) (IO.sleep 2000) original
+
+/-- Explicit one-inclusion adapter shared by deposit senders. -/
+def confirmReceiptInclusion (rpc : String) (original : RpcReceipt.Receipt) : IO Unit :=
+  waitReceiptDepthWith (HttpTransport.call rpc) (IO.sleep 2000) original 1
 
 end Tornado.Runtime.ProtectedTxSender

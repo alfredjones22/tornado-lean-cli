@@ -70,17 +70,36 @@ private def receipt (sender : Nat) (operation : UserOperation) (hash : ByteArray
 
 inductive Fault where
   | none | plannedWrite | delegationWrite | preparedWrite | estimate
-  | code | fee | cancel | send | hash | receipt | nonceChange | finality | changedKey
+  | code | senderCodeChange | senderCodeOnReplan | codeAfterDelegationReview
+  | fee | cancel | send | hash | receipt
+  | nonceChange | initialNonceMismatch | finality | changedKey
   deriving BEq
 
 private def scenario (items : Array DepositMulti.Item) (sender : Nat)
-    (code key : ByteArray) (fault : Fault) : IO (Bool × Nat × Nat × Json) := do
+    (code key : ByteArray) (fault : Fault)
+    (initialSenderCode : ByteArray := ByteArray.empty)
+    (forceDelegated : Bool := false)
+    (estimateCallGas : Nat := 400000)
+    (estimateVerificationGas : Nat := 100000)
+    (estimatePreVerificationGas : Nat := 50000)
+    (feeBase : Nat := 1) (priorityFee : Nat := 1)
+    (quotedMaxFee : Option Nat := none)
+    (expectedFailure : Option String := none)
+    (gasCredit : Nat := 0) (walletBalance : Option Nat := none)
+    (afterReviewGasCredit : Option Nat := none)
+    (afterReviewBalance : Option Nat := none)
+    (malformedCredit : Option String := none)
+    (afterReviewMalformedCredit : Option String := none)
+    (failCreditReadAfterConfirmation : Bool := false)
+    (expectedSummary : Option String := none) :
+    IO (Bool × Nat × Nat × Json × Bool) := do
   let journal ← IO.mkRef Json.null
   let sends ← IO.mkRef (0 : Nat)
   let signs ← IO.mkRef (0 : Nat)
   let completed ← IO.mkRef (0 : Nat)
   let delegated ← IO.mkRef false
   let reviewed ← IO.mkRef false
+  let postReviewSenderCodeReads ← IO.mkRef (0 : Nat)
   let lastOperation ← IO.mkRef (none : Option UserOperation)
   let lastHash ← IO.mkRef ByteArray.empty
   let chunks ← checked <| DepositMulti.splitItems items (depositBatchLimit items[0]!.pool.asset)
@@ -92,12 +111,27 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
         let target ← checked <| params[0]!.getStr?
         if target.toLower == (hex (bytes implementation 20)).toLower then
           return toJson (hex (if fault == .code then bytes 1 1 else code))
-        return toJson (hex (if (← completed.get) == 0 then ByteArray.empty else designator))
-      | .getBalance => return toJson ("0xde0b6b3a7640000" : String)
+        let wasReviewed ← reviewed.get
+        let wasDelegated ← delegated.get
+        let done ← completed.get
+        let afterReviewReads ← if wasReviewed then do
+          postReviewSenderCodeReads.modify (· + 1)
+          postReviewSenderCodeReads.get
+        else pure 0
+        return toJson (hex (if fault == .senderCodeChange && wasReviewed then bytes 1 1
+          else if fault == .senderCodeOnReplan && afterReviewReads >= 2 then bytes 1 1
+          else if fault == .codeAfterDelegationReview && wasDelegated then bytes 1 1
+          else if done == 0 then initialSenderCode else designator))
+      | .getBalance =>
+        let initial := walletBalance.getD 1000000000000000000
+        return toJson (quantity (if ← reviewed.get then
+          afterReviewBalance.getD initial else initial))
       | .getTransactionCount =>
         let wasReviewed ← reviewed.get
         let done ← completed.get
-        return toJson (quantity (if fault == .nonceChange && wasReviewed then 1 else
+        let tag ← checked <| params[1]!.getStr?
+        return toJson (quantity (if fault == .initialNonceMismatch && tag == "pending" then 1 else
+          if fault == .nonceChange && wasReviewed then 1 else
           if done == 0 then 0 else 1))
       | .blockNumber => return toJson ("0x1" : String)
       | .call =>
@@ -106,10 +140,22 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
         if to.toLower == (hex (bytes implementation 20)).toLower then
           return toJson (hex (bytes Bundler.entryPoint 32))
         if to.toLower == (hex (bytes Bundler.entryPoint 20)).toLower then
+          let data ← jsonString request "data"
+          if data == hex (Abi.selector "balanceOf(address)" ++
+              (← checked <| Abi.addressWord sender)) then
+            if failCreditReadAfterConfirmation && (← completed.get) > 0 then
+              throw <| IO.userError "injected post-confirmation gas-credit read failure"
+            let malformed := if ← reviewed.get then
+              afterReviewMalformedCredit.orElse (fun _ => malformedCredit) else malformedCredit
+            if let some malformed := malformed then return toJson malformed
+            let credit := if ← reviewed.get then afterReviewGasCredit.getD gasCredit
+              else gasCredit
+            return toJson (hex (bytes credit 32))
           return toJson (hex (bytes (← completed.get) 32))
         return toJson (hex (bytes items[0]!.pool.amount 32))
       | .feeHistory => return Json.mkObj [
-          ("baseFeePerGas", toJson #["0x1", "0x1"]), ("reward", toJson #[#["0x1"]])]
+          ("baseFeePerGas", toJson (#[quantity feeBase, quantity feeBase])),
+          ("reward", toJson (#[#[quantity priorityFee]]))]
       | .getTransactionReceipt =>
         let some operation ← lastOperation.get
           | throw <| IO.userError "No test UserOperation."
@@ -119,26 +165,43 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
     bundler := fun method params => do
       match method with
       | .pimlicoGasPrice => return Json.mkObj [("standard", Json.mkObj [
-          ("maxFeePerGas", toJson (if fault == .fee then "0x2540be400" else "0x3")),
-          ("maxPriorityFeePerGas", toJson ("0x1" : String))])]
+          ("maxFeePerGas", toJson (quantity <| quotedMaxFee.getD
+            (if fault == .fee then 10000000000 else 3))),
+          ("maxPriorityFeePerGas", toJson (quantity priorityFee))])]
       | .estimateUserOperationGas =>
-        require (← delegated.get) "Estimation ran before explicit delegation approval."
         let stored ← journal.get
         let rows ← checked <| (← checked <| stored.getObjVal? "batches").getArr?
         if (← completed.get) == 0 then
-          require ((← jsonString rows[0]! "status") == "unknown")
-            "Signed delegation reached estimation before uncertainty was durable."
-          let auth ← checked <| rows[0]!.getObjVal? "authorization"
-          let sentAuth ← checked <| params[0]!.getObjVal? "eip7702Auth"
-          require (auth == sentAuth && (rows[0]!.getObjVal? "authorizationHash").isOk)
-            "Signed delegation was not stored exactly before exposure."
+          if initialSenderCode == designator then
+            require (!(← delegated.get) &&
+              (← jsonString rows[0]! "status") == "planned" &&
+              !(rows[0]!.getObjVal? "authorization").isOk &&
+              !(params[0]!.getObjVal? "eip7702Auth").isOk &&
+              !(params[0]!.getObjVal? "factory").isOk)
+              "Compatible delegation reuse sent a new authorization or factory marker."
+          else
+            require (← delegated.get) "Estimation ran before explicit delegation approval."
+            require ((← jsonString rows[0]! "status") == "unknown")
+              "Signed delegation reached estimation before uncertainty was durable."
+            let auth ← checked <| rows[0]!.getObjVal? "authorization"
+            let sentAuth ← checked <| params[0]!.getObjVal? "eip7702Auth"
+            require (auth == sentAuth && (rows[0]!.getObjVal? "authorizationHash").isOk)
+              "Signed delegation was not stored exactly before exposure."
+        else
+          require (!(params[0]!.getObjVal? "eip7702Auth").isOk &&
+            !(params[0]!.getObjVal? "factory").isOk)
+            "A later batch carried a second authorization or factory marker."
         if fault == .estimate then throw <| IO.userError "injected estimator failure"
-        return Json.mkObj [("verificationGasLimit", toJson ("0x186a0" : String)),
-          ("callGasLimit", toJson ("0x61a80" : String)),
-          ("preVerificationGas", toJson ("0xc350" : String))]
+        return Json.mkObj [("verificationGasLimit", toJson (quantity estimateVerificationGas)),
+          ("callGasLimit", toJson (quantity estimateCallGas)),
+          ("preVerificationGas", toJson (quantity estimatePreVerificationGas))]
       | .sendUserOperation =>
         require (← reviewed.get) "Send occurred before final batch review."
         let operation ← decodeOperation params[0]! sender
+        if (← sends.get) == 0 && initialSenderCode == designator then
+          require (operation.factory.isNone &&
+            !(params[0]!.getObjVal? "eip7702Auth").isOk)
+            "Compatible delegation reuse sent a factory marker or new authorization."
         let hash ← checked <| userOperationHash 1 Bundler.entryPoint operation
         let stored ← journal.get
         let rows ← checked <| (← checked <| stored.getObjVal? "batches").getArr?
@@ -160,8 +223,9 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
           ("receipt", Json.mkObj [("transactionHash", toJson (hex (bytes 99 32)))])]
       | _ => throw <| IO.userError "Unexpected test bundler method.",
     signDigest := fun digest => do
-      require (← delegated.get) "Signing occurred before delegation review."
       signs.modify (· + 1)
+      require ((← delegated.get) || (← reviewed.get))
+        "Signing occurred before delegation or batch review."
       let signature ← checked <| secp256k1SignDigest key digest
       return (if fault == .changedKey then sender + 1 else sender, signature.bytes65),
     createJournal := fun content => do
@@ -175,7 +239,7 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
       let rows ← checked <| (← checked <| after.getObjVal? "batches").getArr?
       if fault == .delegationWrite && (← signs.get) == 1 then
         throw <| IO.userError "injected delegation journal failure"
-      if fault == .preparedWrite && (← signs.get) == 2 then
+      if fault == .preparedWrite && (← jsonString rows[0]! "status") == "prepared" then
         throw <| IO.userError "injected signed operation journal failure"
       require (!rows.isEmpty) "Lost journal batches."
       journal.set after,
@@ -188,11 +252,20 @@ private def scenario (items : Array DepositMulti.Item) (sender : Nat)
       completed.modify (· + 1),
     pause := pure () }
   let passed ← try
-    let _ ← executeWith effects items .mainnet sender "https://rpc.invalid" "https://bundler.invalid"
+    let result ← executeWith effects items .mainnet sender "https://rpc.invalid" "https://bundler.invalid"
+      false defaultBounds forceDelegated
+    if let some expected := expectedSummary then
+      require ((result.splitOn expected).length > 1)
+        "Confirmed deposit omitted the expected gas-credit summary."
     pure true
-  catch _ => pure false
-  return (passed, ← sends.get, ← signs.get, ← journal.get)
+  catch error =>
+    if let some expected := expectedFailure then
+      require ((error.toString.splitOn expected).length > 1)
+        s!"Expected {expected}, got {error}."
+    pure false
+  return (passed, ← sends.get, ← signs.get, ← journal.get, ← delegated.get)
 
+set_option maxRecDepth 4096 in
 def main : IO UInt32 := do
   let key := bytes 1 32
   let ownerBytes ← checked <| secp256k1EthereumAddress key
@@ -257,26 +330,200 @@ def main : IO UInt32 := do
   let sig ← checked <| secp256k1SignDigest key digest
   require (hex sig.bytes65 == (← jsonString oracle "signature"))
     "Simple7702 typed-data signature differs from pinned viem."
-  let (success, sends, signs, journal) ← scenario items sender code key .none
-  require (success && sends == 1 && signs == 2) "Batched deposit did not complete."
+  let (success, sends, signs, journal, approved) ← scenario items sender code key .none
+  require (success && sends == 1 && signs == 2 && approved)
+    "Batched deposit did not durably authorize and complete."
   let parsed ← checked <| DepositStatusCommand.parseBatchJournal journal
   require (parsed.batches.size == 1 && parsed.batches[0]!.status == "confirmed")
     "Batch journal is incompatible with native reconciliation."
   let many := (List.range 13).toArray.map (fun i => (⟨pool, bytes (i + 1) 32⟩ : DepositMulti.Item))
-  let (multi, multiSends, multiSigns, _) ← scenario many sender code key .none
+  let (multi, multiSends, multiSigns, _, _) ← scenario many sender code key .none
   require (multi && multiSends == 2 && multiSigns == 3)
     "Multiple batches did not reuse only the current-session delegation."
+  let (reuse, reuseSends, reuseSigns, reusedJournal, reuseApproved) ←
+    scenario items sender code key .none designator
+  require (reuse && reuseSends == 1 && reuseSigns == 1 && !reuseApproved)
+    "Compatible existing delegation signed a new authorization or missed its batch."
+  require (requiredNativeBalance 1000 100 20 == 1080 &&
+    requiredNativeBalance 1000 100 100 == 1000 &&
+    requiredNativeBalance 1000 100 200 == 1000 &&
+    requiredNativeBalance 0 100 200 == 0)
+    "EntryPoint gas credit funded principal or underflowed the required native balance."
+  let totalValue := items.foldl (fun total item => total + item.pool.amount) 0
+  let maximumCost := (400000 + 100000 + 50000) * 3
+  let (creditFull, creditFullSends, creditFullSigns, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost) (walletBalance := some totalValue)
+      (expectedSummary := some "Remaining EntryPoint gas credit:")
+  require (creditFull && creditFullSends == 1 && creditFullSigns == 1)
+    "Fully funded EntryPoint credit did not permit exact ETH principal in the wallet."
+  let (creditPartial, creditPartialSends, _, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost - 1) (walletBalance := some (totalValue + 1))
+  require (creditPartial && creditPartialSends == 1)
+    "Partial EntryPoint credit was ignored when checking native gas funding."
+  let some creditTokenPool := poolFor .mainnet "100" "USDC"
+    | throw <| IO.userError "Missing token gas-credit fixture pool."
+  let creditTokenItems : Array DepositMulti.Item := #[⟨creditTokenPool, bytes 777 32⟩]
+  let (tokenCredit, tokenCreditSends, tokenCreditSigns, _, _) ←
+    scenario creditTokenItems sender code key .none designator true
+      (gasCredit := maximumCost) (walletBalance := some 0)
+  require (tokenCredit && tokenCreditSends == 1 && tokenCreditSigns == 1)
+    "Fully credited token deposit incorrectly required ETH in the owner wallet."
+  let (creditInsufficient, creditInsufficientSends, creditInsufficientSigns, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost - 2) (walletBalance := some (totalValue + 1))
+  require (!creditInsufficient && creditInsufficientSends == 0 && creditInsufficientSigns == 0)
+    "Insufficient combined wallet/EntryPoint gas funding reached signing."
+  let (principalMissing, principalMissingSends, principalMissingSigns, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost * 2) (walletBalance := some (totalValue - 1))
+  require (!principalMissing && principalMissingSends == 0 && principalMissingSigns == 0)
+    "EntryPoint gas credit was counted toward the ETH deposit principal."
+  for changedCredit in [0, maximumCost - 2] do
+    let (changed, changedSends, changedSigns, _, _) ←
+      scenario items sender code key .none designator
+        (gasCredit := maximumCost) (walletBalance := some (totalValue + 1))
+        (afterReviewGasCredit := some changedCredit)
+    require (!changed && changedSends == 0 && changedSigns == 0)
+      "Gas credit lost after approval was not rechecked before signing."
+  let (balanceLost, balanceLostSends, balanceLostSigns, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost - 1) (walletBalance := some (totalValue + 1))
+      (afterReviewBalance := some totalValue)
+  require (!balanceLost && balanceLostSends == 0 && balanceLostSigns == 0)
+    "Native gas funding lost after approval was not rechecked before signing."
+  for malformed in ["0x", hex (bytes 1 31), hex (bytes 1 33), "0xzz"] do
+    let (accepted, sent, signed, _, _) ← scenario items sender code key .none designator
+      (malformedCredit := some malformed)
+    require (!accepted && sent == 0 && signed == 0)
+      "Malformed EntryPoint gas credit reached signing or submission."
+  let (malformedAfter, malformedAfterSends, malformedAfterSigns, _, _) ←
+    scenario items sender code key .none designator
+      (gasCredit := maximumCost) (walletBalance := some totalValue)
+      (afterReviewMalformedCredit := some "0x01")
+  require (!malformedAfter && malformedAfterSends == 0 && malformedAfterSigns == 0)
+    "Malformed gas credit after approval reached signing or submission."
+  let (creditReadFailed, creditReadFailedSends, _, _, _) ←
+    scenario items sender code key .none designator
+      (failCreditReadAfterConfirmation := true)
+      (expectedSummary := some "the deposits remain confirmed")
+  require (creditReadFailed && creditReadFailedSends == 1)
+    "Optional credit reporting turned a confirmed deposit into a failure."
+  let reuseRows ← checked <| (← checked <| reusedJournal.getObjVal? "batches").getArr?
+  require ((← jsonString reuseRows[0]! "status") == "confirmed" &&
+    !(reuseRows[0]!.getObjVal? "authorization").isOk &&
+    (← jsonString reusedJournal "initialSenderCode") == hex designator &&
+    (← checked <| (← checked <| reusedJournal.getObjVal? "reusedDelegation").getBool?))
+    "Compatible delegation reuse journal unexpectedly included an authorization."
+  let (reuseMany, reuseManySends, reuseManySigns, _, reuseManyApproved) ←
+    scenario many sender code key .none designator
+  require (reuseMany && reuseManySends == 2 && reuseManySigns == 2 && !reuseManyApproved)
+    "Compatible delegation was not safely reused across multiple batches."
+  let twelve := (List.range 12).toArray.map fun i =>
+    (⟨pool, bytes (i + 1) 32⟩ : DepositMulti.Item)
+  let (large, largeSends, largeSigns, _, largeApproved) ←
+    scenario twelve sender code key .none designator false
+      13879390 100000 50000 0 1000000000 (some 1000000000)
+  let twelveCost := (13879390 + 100000 + 50000) * 1000000000
+  require (twelveCost > 12 * pool.amount / 10 &&
+    twelveCost < 50000000000000000 &&
+    large && largeSends == 1 && largeSigns == 1 && !largeApproved)
+    "Twelve small notes at 1 gwei were blocked by the old aggregate 10% cap."
+  let some largerPool := poolFor .mainnet "0.1" "ETH"
+    | throw <| IO.userError "Missing larger ETH fixture pool."
+  let largerItem : DepositMulti.Item := ⟨largerPool, bytes 40 32⟩
+  let (largerAccepted, largerSends, largerSigns, _, _) ←
+    scenario #[largerItem] sender code key .none designator true
+      1000000 100000 50000 7000000000 1000000000 (some 15000000000)
+      (some "Batch maximum network fee exceeds ten percent of ETH deposits.")
+  let largerCost := (1000000 + 100000 + 50000) * 15000000000
+  require (largerCost > largerPool.amount / 10 &&
+    largerCost < 50000000000000000 &&
+    !largerAccepted && largerSends == 0 && largerSigns == 0)
+    "A batch with a note above 0.01 ETH bypassed the retained 10% cap."
+  let (absoluteAccepted, absoluteSends, absoluteSigns, _, _) ←
+    scenario twelve sender code key .none designator false
+      13879390 100000 50000 1500000000 1000000000 (some 4000000000)
+      (some "UserOperation exceeds the reviewed gas or network fee bounds.")
+  require ((13879390 + 100000 + 50000) * 4000000000 >
+    50000000000000000 && 13879390 < defaultBounds.maxCallGas &&
+    13879390 + 100000 + 50000 < maxOperationGas &&
+    !absoluteAccepted && absoluteSends == 0 && absoluteSigns == 0)
+    "All-small batch bypassed the retained 0.05 ETH absolute fee cap."
+  let (excessive, excessiveSends, excessiveSigns, _, _) ←
+    scenario twelve sender code key .none designator false 15000001
+  require (!excessive && excessiveSends == 0 && excessiveSigns == 0)
+    "Call gas above the deposit-only 15m cap reached signing or submission."
+  let (combined, combinedSends, combinedSigns, _, _) ←
+    scenario twelve sender code key .none designator false 14900000 900000 500000
+  require (!combined && combinedSends == 0 && combinedSigns == 0)
+    "UserOperation over the 16m combined gas cap reached signing or submission."
+  let foreign := bytes 0xef 1 ++ bytes 0x01 1 ++ bytes 0 1 ++ bytes 123 20
+  let (replaced, replacedSends, replacedSigns, _, replaceApproved) ←
+    scenario items sender code key .none foreign true
+  require (replaced && replacedSends == 1 && replacedSigns == 2 && replaceApproved)
+    "Forced replacement of an existing 7702 designator did not authorize once."
+  let (changedForeign, changedForeignSends, changedForeignSigns, _, _) ←
+    scenario items sender code key .codeAfterDelegationReview foreign true
+  require (!changedForeign && changedForeignSends == 0 && changedForeignSigns == 0)
+    "Sender code changed after delegation review but authorization was signed."
+  let (plainForeign, plainForeignSends, plainForeignSigns, _, _) ←
+    scenario items sender code key .none foreign
+  require (!plainForeign && plainForeignSends == 0 && plainForeignSigns == 0)
+    "Foreign 7702 designator entered the batch route without --delegated."
+  let (forcedOne, forcedOneSends, forcedOneSigns, _, forcedOneApproved) ←
+    scenario #[items[0]!] sender code key .none ByteArray.empty true
+  require (forcedOne && forcedOneSends == 1 && forcedOneSigns == 2 && forcedOneApproved)
+    "Explicit delegation did not batch a single approval-free note."
+  let (reuseOne, reuseOneSends, reuseOneSigns, _, reuseOneApproved) ←
+    scenario #[items[0]!] sender code key .none designator
+  require (!reuseOne && reuseOneSends == 0 && reuseOneSigns == 0 && !reuseOneApproved)
+    "Compatible delegation enabled an implicit single-note UserOperation."
+  let (forcedReuseOne, forcedReuseOneSends, forcedReuseOneSigns, _, forcedReuseOneApproved) ←
+    scenario #[items[0]!] sender code key .none designator true
+  require (forcedReuseOne && forcedReuseOneSends == 1 && forcedReuseOneSigns == 1 && !forcedReuseOneApproved)
+    "--delegated failed to reuse a compatible delegation for one note."
+  for invalid in [bytes 0x60 1, foreign.extract 0 22] do
+    let (passed, sent, signed, _, _) ← scenario items sender code key .none invalid true
+    require (!passed && sent == 0 && signed == 0)
+      "Forced delegation accepted ordinary contract or malformed 7702 code."
+  for fault in [Fault.senderCodeChange, .initialNonceMismatch] do
+    let (passed, sent, signed, _, _) ← scenario items sender code key fault designator
+    require (!passed && sent == 0 && signed == 0)
+      "Compatible delegation signed or sent after changed code or owner nonce."
+  let (changedOnReplan, replanSends, replanSigns, _, _) ←
+    scenario items sender code key .senderCodeOnReplan designator
+  require (!changedOnReplan && replanSends == 0 && replanSigns == 0)
+    "Fresh sender code changed during replan but UserOperation was signed or sent."
+  let (reservation, reservedSends, reservedSigns, reservationJournal, _) ←
+    scenario items sender code key .preparedWrite designator
+  let reservationRows ← checked <| (← checked <| reservationJournal.getObjVal? "batches").getArr?
+  require (!reservation && reservedSends == 0 && reservedSigns == 1 &&
+    (← jsonString reservationRows[0]! "status") == "planned" &&
+    !(reservationRows[0]!.getObjVal? "userOpHash").isOk)
+    "Failed reused-delegation hash reservation exposed or saved a signed operation."
+  for fault in [Fault.send, .hash] do
+    let (passed, sent, signed, saved, approved) ←
+      scenario many sender code key fault designator
+    let batches ← checked <| (← checked <| saved.getObjVal? "batches").getArr?
+    require (!passed && sent == 1 && signed == 1 && !approved &&
+      (← jsonString batches[0]! "status") == "unknown" &&
+      (← jsonString batches[1]! "status") == "planned" &&
+      (← jsonString batches[0]! "userOpHash").utf8ByteSize == 66)
+      "Ambiguous reused-delegation batch lost its hash or advanced to a second send."
   for fault in [Fault.plannedWrite, .delegationWrite, .preparedWrite, .estimate,
       .code, .fee, .cancel, .nonceChange, .changedKey] do
-    let (passed, sent, _, _) ← scenario items sender code key fault
+    let (passed, sent, _, _, _) ← scenario items sender code key fault
     require (!passed && sent == 0) "A failed preparation sent a batched operation."
   for fault in [Fault.send, .hash, .receipt, .finality] do
-    let (passed, sent, signed, saved) ← scenario many sender code key fault
+    let (passed, sent, signed, saved, _) ← scenario many sender code key fault
     require (!passed && sent == 1 && signed == 2)
       "An ambiguous batch advanced to the next signing or send."
     let batches ← checked <| (← checked <| saved.getObjVal? "batches").getArr?
     require ((← jsonString batches[0]! "status") == "unknown" &&
-      (← jsonString batches[1]! "status") == "planned")
+      (← jsonString batches[1]! "status") == "planned" &&
+      (← jsonString batches[0]! "userOpHash").utf8ByteSize == 66)
       "Ambiguous batch lost its reservation or changed the next batch."
   IO.println "PASS: native Simple7702 batches, viem parity, durable delegation exposure, exact events, and ambiguity stop"
   return 0

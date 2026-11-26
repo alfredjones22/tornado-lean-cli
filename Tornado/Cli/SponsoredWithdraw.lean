@@ -40,6 +40,7 @@ structure Options where
   simulationPolicy : PaymasterPrepare.Policy := .required
   executionGasRetry : Bool := false
   yes : Bool := false
+  nonInteractive : Bool := false
   retryRejected : Bool := false
   experimental : Bool := false
   dryRun : Bool := false
@@ -72,10 +73,11 @@ private def valueOption (name value : String) (options : Options) : Except Strin
 def parseOptions : List String → Options → Except String Options
   | [], options => .ok options
   | "--help" :: _, options | "-h" :: _, options => .ok { options with help := true }
-  | "--experimental-send" :: rest, options => parseOptions rest { options with experimental := true }
+  | "--broadcast" :: rest, options => parseOptions rest { options with experimental := true }
   | "--dry-run" :: rest, options => parseOptions rest { options with dryRun := true }
   | "--preflight" :: rest, options => parseOptions rest { options with preflight := true }
   | "--yes" :: rest, options => parseOptions rest { options with yes := true }
+  | "--non-interactive" :: rest, options => parseOptions rest { options with nonInteractive := true }
   | "--retry-rejected" :: rest, options => parseOptions rest { options with retryRejected := true }
   | "--execution-gas-retry" :: rest, options => parseOptions rest { options with executionGasRetry := true }
   | name :: rest, options => do
@@ -158,12 +160,12 @@ private def expectedEvents (review : WithdrawalSend.Review) : Except String (Lis
       nullifierHash := ← Abi.uintWord note.request.nullifierHash,
       relayer := note.request.relayer, fee := note.request.fee }
 
-private def approve (text : String) : IO Unit := do
-  IO.println "EXPERIMENTAL: the isolated Lean prover uses variable-time arithmetic and cannot guarantee secret erasure."
+private def approve (nonInteractive : Bool) (text : String) : IO Unit := do
   IO.println text
-  IO.println "Type WITHDRAW to sign and submit exactly this withdrawal:"
-  if jsTrim (← (← IO.getStdin).getLine) != "WITHDRAW" then
-    fail "Withdrawal cancelled before signing."
+  if !nonInteractive then
+    IO.println "Type WITHDRAW to sign and submit exactly this withdrawal:"
+    if jsTrim (← (← IO.getStdin).getLine) != "WITHDRAW" then
+      fail "Withdrawal cancelled before signing."
 
 private def reconcile (batch : Bool) (path rpc bundler : String) : IO (String × UInt32) :=
   if batch then BatchWithdrawalStatus.statusCommand
@@ -183,24 +185,31 @@ private def confirmedDepth (client : WithdrawalNetwork.Client) (rpc path : Strin
 
 /-- Expensive proof generation does not consume the final review window.
 The native refresh callback must recheck the exact known roots, account and
-current gas-price policy before the clock starts; no fee or proof is changed. -/
+current gas-price policy before the clock starts. A separately returned bid
+may only decrease its prices; the original preparation, proof-bound fees and
+all five gas limits remain unchanged. No signing has happened at this seam. -/
 def finishPreparationWith (prepare : IO PaymasterPrepare.Prepared)
-    (refresh : PaymasterPrepare.Prepared → IO Unit) (now : IO Nat) :
-    IO (PaymasterPrepare.Prepared × Nat) := do
+    (refresh : PaymasterPrepare.Prepared → IO SponsoredWithdrawal.Gas) (now : IO Nat) :
+    IO (PaymasterPrepare.Prepared × SponsoredWithdrawal.Gas × Nat) := do
   let prepared ← prepare
-  refresh prepared
-  return (prepared, ← now)
+  let candidate ← refresh prepared
+  let gas ← checked <| WithdrawalNetwork.acceptDownwardGas
+    prepared.quote.gas candidate prepared.quote.input.bounds
+  return (prepared, gas, ← now)
 
 private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt32) := do
   if options.dryRun || options.preflight || !options.experimental then
-    fail "Choose --experimental-send separately from --dry-run and --preflight."
-  if options.yes then fail "Experimental withdrawals require typed WITHDRAW approval; --yes is unavailable."
-  if options.retryRejected then fail "Existing attempts must be reconciled; experimental withdrawals do not replace a reserved candidate."
+    fail "Choose --broadcast separately from --dry-run and --preflight."
+  if options.yes then fail "Withdrawals require typed WITHDRAW approval; --yes is unavailable."
+  if batch && options.nonInteractive && options.keyFile.isNone then
+    fail "--non-interactive requires --owner-key-file for batch withdrawals."
+  if options.retryRejected then fail "Existing attempts must be reconciled; withdrawals do not replace a reserved candidate."
   if options.route != "4337" then fail "Sponsored withdrawals require --route 4337."
   let some inputFile := options.file | fail "Provide a protected note backup."
   let noteFile ← absolute inputFile
   let chain ← checked <| parseChainInput options.chain
   let chainId := chainNumber chain
+  let ownerSource ← if batch then NativeSigner.resolveKeyFile options.keyFile else pure ""
   let (rpc, bundler, customBundler) ← endpoints options chain
   let (worker, provingRoot) ← runtimePaths options
   let metadata ← if batch then ProverWorkerClient.inspectBatchPrototype worker noteFile chainId
@@ -216,8 +225,7 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
   let mut selectedAccount : Option SmartAccountShow.Account := none
   let mut selectedCalls : Array Abi.ContractCall := #[]
   let recipient ← if batch then do
-      let some key := options.keyFile | fail "Provide --owner-key-file for the recoverable smart account."
-      selectedKeyPath ← absolute key
+      selectedKeyPath := ownerSource
       selectedOwner ← NativeSigner.addressFromProtectedFile selectedKeyPath
       let account ← WithdrawBatch.loadAccountWith chain selectedOwner client.rpc
       selectedAccount := some account
@@ -247,7 +255,10 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
     | some account => .batch {
         address := account.address, owner := account.owner,
         nonce := account.nonce, deployed := account.deployed } recipient calls
-  let sessions ← WithdrawalSession.inspectManyLive rpc metadata options.assetsDir options.cacheDir
+  IO.println "Syncing and checking pool history..."
+  let assetsDir := options.assetsDir.orElse (fun _ =>
+    some ((System.FilePath.mk provingRoot / "assets").toString))
+  let sessions ← WithdrawalSession.inspectManyLive rpc metadata assetsDir options.cacheDir
   let initialRecipient := batchAccount.map (·.address) |>.getD recipient
   let requests ← checked <| WithdrawalSession.requestsMany sessions initialRecipient
   let some first := sessions[0]? | fail "Select at least one note."
@@ -259,27 +270,56 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
       let some index := metadata.findIdx? (fun note => note.matchesRequest request)
         | fail "Prover request is outside the selected note set."
       let noteIndex := if batch then some (toString (index + 1)) else options.noteIndex
+      IO.println s!"Generating proof {index + 1}/{metadata.size}..."
       let result ← ProverWorkerClient.runPrototype worker provingRoot noteFile noteIndex request
+        (onVerifying := IO.println s!"Verifying proof {index + 1}/{metadata.size}...")
       return { requestHash := result.responseHash, proof := result.proofBytes, signals := result.signals })
     (fun selected => checkSessions sessions selected rpc)
-  let (prepared, preparedAtMs) ← finishPreparationWith
+  -- The pinned factory alone costs about 0.8M gas for a new account.
+  -- Keep the larger deployment allowance local to that path; direct and
+  -- already-deployed account withdrawals retain the normal transport cap.
+  let bounds : Bundler.Bounds := match batchAccount with
+    | some account => if account.deployed then {} else { maxVerificationGas := 2000000 }
+    | none => {}
+  let (prepared, reviewGas, preparedAtMs) ← finishPreparationWith
     (PaymasterPrepare.prepareWith effects {
       notes := requests, mode, checkedBlock := block,
-      policy := options.simulationPolicy, executionGasRetry := options.executionGasRetry })
+      policy := options.simulationPolicy, executionGasRetry := options.executionGasRetry,
+      bounds })
     (fun prepared => do
-      checkSessions sessions (prepared.notes.map (·.request)) rpc
-      client.revalidateGasPrice prepared.quote.gas
+      try checkSessions sessions (prepared.notes.map (·.request)) rpc catch _ =>
+        fail "Could not recheck note history after proving. Check --rpc or try another endpoint. Nothing was signed or submitted."
+      -- Arbitrary calls may branch on GASPRICE. Preserve their estimated bid;
+      -- only direct withdrawals and batches without custom calls may refresh.
+      let gas ← match mode with
+        | .single .. =>
+          client.refreshGasBidDownward prepared.quote.gas prepared.quote.input.bounds
+        | .batch _ _ tail =>
+          if tail.isEmpty then
+            client.refreshGasBidDownward prepared.quote.gas prepared.quote.input.bounds
+          else do
+            client.revalidateGasPrice prepared.quote.gas
+            pure prepared.quote.gas
       match batchAccount with
       | none => checkDirect client owner
       | some old =>
-        if (← WithdrawBatch.loadAccountWith chain owner client.rpc) != old then
-          fail "Smart-account identity or nonce changed while proofs were generated.")
+        let current ← try WithdrawBatch.loadAccountWith chain owner client.rpc catch _ =>
+          fail "Could not recheck the smart account after proving. Check --rpc or try another endpoint. Nothing was signed or submitted."
+        if current != old then
+          fail "Smart-account identity or nonce changed while proofs were generated."
+      return gas)
     IO.monoMsNow
+  if reviewGas.maxFee != prepared.quote.gas.maxFee ||
+      reviewGas.priority != prepared.quote.gas.priority then
+    IO.println "Gas bid lowered after proving; the proved note fee and payout are unchanged."
+  if prepared.quote.estimation == .fallback .validationOnlyEstimator then
+    IO.println "Gas estimation: automatically handled the known bundler zero-execution issue using bounded conservative gas. Execution gas remains zero."
   let review : WithdrawalSend.Review := {
     mode := match mode with
       | .single sender recipient => .single sender recipient
       | .batch account receiver calls => .batch account receiver calls
-    notes := prepared.notes, owner, gas := prepared.quote.gas, preparedAtMs, fromBlock := block }
+    notes := prepared.notes, owner, gas := reviewGas, preparedAtMs, fromBlock := block,
+    bounds := prepared.quote.input.bounds }
   let journal ← WithdrawalJournal.create paths
   let signingStarted ← IO.mkRef false
   let senderLock ← if batch then do
@@ -294,7 +334,7 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
   try
     let sendEffects : WithdrawalSend.Effects := {
       rpc := client.send
-      approve := approve
+      approve := approve options.nonInteractive
       revalidate := fun reviewed => do
         checkSessions sessions (reviewed.notes.map (·.request)) rpc
         client.checkChain
@@ -322,10 +362,18 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
       markSubmitted := fun hash => WithdrawalJournal.mark journal hash "submitted"
       markUnknown := fun hash => WithdrawalJournal.mark journal hash "unknown"
       simulate := fun op => do
-        client.simulate op (← checked <| expectedEvents review) prepared.quote.estimation
+        IO.println "Checking the complete signed operation..."
+        let passed ← client.simulate op (← checked <| expectedEvents review)
+          prepared.quote.estimation review.bounds
+        unless passed do
+          IO.println "Final simulation did not pass. No bundler submission was made by this command; the signed candidate is retained for reconciliation."
+        return passed
       nowMs := IO.monoMsNow }
     let outcome ← WithdrawalSend.executeWith sendEffects review
     let hash := match outcome with | .submitted hash | .unknown hash => hash
+    match outcome with
+    | .submitted _ => IO.println "Submitted. Waiting for verified transaction inclusion..."
+    | .unknown _ => IO.println "Outcome uncertain. Checking the recorded operation; do not resend or clear its reservations."
     let mut last := s!"Withdrawal outcome unknown. Operation: {Bundler.dataHex hash}\n"
     for _ in [0:90] do
       let (output, code) ← try reconcile batch paths[0]! rpc bundler
@@ -334,7 +382,7 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
       if code == 0 then
         confirmedDepth client rpc paths[0]!
         if let some (path, bytes) := senderLock then ProtectedIO.removePrivateExact path bytes
-        return (output ++ s!"Twelve confirmations observed. Status file: {paths[0]!}\n", 0)
+        return (output ++ s!"Transaction inclusion confirmed. Status file: {paths[0]!}\n", 0)
       IO.sleep 2000
     return (last ++ s!"Status file: {paths[0]!}\nNo replacement was sent; reconcile this candidate before taking further action.\n" ++
       (senderLock.map (fun (path, _) => s!"Sender lock retained: {path}\n")).getD "", 2)
@@ -345,21 +393,25 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
     throw error
 
 private def help (batch : Bool) : String :=
-  (if batch then "Usage: tornado withdraw batch --notes-file <path> --owner-key-file <path> [options]\n"
+  (if batch then "Usage: tornado withdraw batch --notes-file <path> [--owner-key-file <path>] [options]\n"
     else "Usage: tornado withdraw one --note-file <path> --recipient <address> [options]\n") ++
-  "Use --dry-run for review, or --experimental-send for the explicitly experimental live path.\n" ++
+  "Use --dry-run for review, or --broadcast to send after typed approval.\n" ++
+  "Network: --chain <1|11155111> defaults to 1 (Ethereum mainnet). Use --chain 11155111 for Sepolia notes.\n" ++
   "One-note --preflight checks history without signing. --route 4337|relayer selects the one-note route.\n" ++
-  "Live withdrawals require typed WITHDRAW approval; --yes and replacement retries are unavailable.\n" ++
+  "Live withdrawals require WITHDRAW approval, or explicit --non-interactive authorization. --yes and replacement retries are unavailable.\n" ++
+  "--non-interactive still prints the review and runs all checks; batch mode requires --owner-key-file.\n" ++
   "Options: --chain, --rpc, --bundler-url, --status-dir, --assets-dir, --history-cache-dir, --proving-assets-root.\n" ++
-  "Batch options: --receiver, --contract-calls, --simulation-rpc, --simulation-policy required|best-effort, --execution-gas-retry.\n" ++
-  "The default required policy blocks unavailable simulation. Best-effort only permits narrowly identified unavailability after successful dummy estimation.\n"
+  "Batch options: --recipient/--receiver, --contract-calls, --simulation-rpc, --simulation-policy required|best-effort, --execution-gas-retry. --note-file aliases --notes-file.\n" ++
+  "The known zero-execution bundler estimation issue is handled automatically for direct one-note withdrawals using bounded conservative gas.\n" ++
+  "Other estimation/simulation outages remain blocked by default; best-effort allows only narrowly classified unavailability. Batches still require successful gas estimation.\n" ++
+  "Batch signed-simulation unavailability still requires a successful dummy estimate; explicit validation failures always block.\n"
 
 def command (batch : Bool) (args : List String) : IO (String × UInt32) := do
   if args.contains "--help" || args.contains "-h" then return (help batch, 0)
-  if !args.contains "--experimental-send" then
+  if !args.contains "--broadcast" then
     if !args.contains "--dry-run" && (batch || !args.contains "--preflight") then
-      fail (if batch then "Choose --dry-run or --experimental-send."
-        else "Choose --dry-run, --preflight or --experimental-send.")
+      fail (if batch then "Choose --dry-run or --broadcast."
+        else "Choose --dry-run, --preflight or --broadcast.")
     return (← if batch then WithdrawBatch.withdrawBatchCommand args
       else WithdrawOne.withdrawOneCommand args, 0)
   let options ← checked <| parseOptions args {}
@@ -377,9 +429,11 @@ def command (batch : Bool) (args : List String) : IO (String × UInt32) := do
     let (worker, root) ← runtimePaths options
     return ← RelayerWithdraw.run {
       noteFile, recipient, workerPath := worker, provingRoot := root, rpcUrl := rpc,
-      chainId := chainNumber chain, noteIndex := options.noteIndex, assetsDir := options.assetsDir,
+      chainId := chainNumber chain, noteIndex := options.noteIndex,
+      assetsDir := options.assetsDir.orElse (fun _ => some ((System.FilePath.mk root / "assets").toString)),
       cacheDir := options.cacheDir, statusDir := options.statusDir,
-      experimental := true, retryRejected := options.retryRejected, yes := options.yes }
+      experimental := true, retryRejected := options.retryRejected, yes := options.yes,
+      nonInteractive := options.nonInteractive }
   runSponsored options batch
 
 end Tornado.Cli.SponsoredWithdraw

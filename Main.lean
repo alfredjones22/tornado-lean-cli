@@ -3,11 +3,13 @@ import Tornado.Domain.ChainInput
 import Tornado.Policy
 import Tornado.Domain.DepositBackup
 import Tornado.Runtime.ProtectedIO
+import Tornado.Runtime.Entropy
 import Tornado.Cli.NoteCreate
 import Tornado.Cli.SmartAccountShow
 import Tornado.Cli.SmartAccountStatus
 import Tornado.Cli.SmartAccountRecover
 import Tornado.Cli.DepositStatus
+import Tornado.Cli.DepositResume
 import Tornado.Cli.DepositStatusCommand
 import Tornado.Cli.WithdrawalStatusCommand
 import Tornado.Cli.RelayerWithdrawalStatus
@@ -166,7 +168,16 @@ def runReadOnly : List String → Except String String
 private def help : String :=
   "tornado-lean-cli (native Lean port in progress)\n\n" ++
   "Commands: pools, deposit plan, deposit send, deposit pay-invoice, deposit status, deposit inspect-status, notes create, notes create-plan, notes inspect, notes invoice, withdraw one, withdraw batch, withdraw status, smart-account show, smart-account status, smart-account recover, history, compliance report.\n" ++
-  "Sending requires explicit --experimental-send and typed review. Deposit/recovery sends also require a new protected journal. Withdrawal commands retain protected note reservations. Use --dry-run for review without sending.\n"
+  "Sending requires --broadcast and review; --non-interactive explicitly authorizes the reviewed send without a typed prompt. Deposits choose a journal when omitted; recovery requires --journal. Resume uses the original journal. Omit the account key-file option for hidden terminal entry. Use --dry-run for review without sending.\n"
+
+/-- Select a unique visible journal name without creating or overwriting it.
+The deposit adapter still performs protected exclusive creation before any
+signature can be exposed. Resume always supplies its original journal. -/
+private def depositJournalPath (requested : Option String) (chain : ChainId) : IO String := do
+  if let some path := requested then return path
+  let directory ← IO.currentDir
+  let suffix := Tornado.Crypto.bytesToHex (← Tornado.Runtime.Entropy.readKernelRandom 16)
+  return (directory / s!"tornado-deposit-{chainNumber chain}-{suffix}.json").toString
 
 private structure InvoiceOptions where
   invoiceFile : Option String := none
@@ -176,6 +187,7 @@ private structure InvoiceOptions where
   rpc : Option String := none
   dryRun : Bool := false
   experimentalSend : Bool := false
+  nonInteractive : Bool := false
   help : Bool := false
   deriving Inhabited
 
@@ -195,8 +207,10 @@ private partial def parseInvoiceOptions (args : List String)
   | "--rpc" :: value :: rest =>
       parseInvoiceOptions rest { options with rpc := some value }
   | "--dry-run" :: rest => parseInvoiceOptions rest { options with dryRun := true }
-  | "--experimental-send" :: rest =>
+  | "--broadcast" :: rest =>
       parseInvoiceOptions rest { options with experimentalSend := true }
+  | "--non-interactive" :: rest =>
+      parseInvoiceOptions rest { options with nonInteractive := true }
   | ["--invoice-file"] | ["--key-file"] | ["--journal"] |
       ["--chain"] | ["--rpc"] =>
       .error "error: option argument missing"
@@ -214,9 +228,11 @@ private partial def parseInvoiceOptions (args : List String)
       else .error s!"error: unknown option '{item}'"
 
 private def invoiceHelp : String :=
-  "Usage: tornado deposit pay-invoice --invoice-file <path> --key-file <path> [--chain <id>] [--rpc <url>] (--dry-run | --experimental-send --journal <new-path>)\n" ++
-  "Dry run reviews one invoice without signing. Experimental send requires typing SEND for every reviewed transaction.\n" ++
-  "The protected native signer is experimental; the complete funded path is not audited or certified.\n"
+  "Usage: tornado deposit pay-invoice --invoice-file <path> [--key-file <path>] [--chain <id>] [--rpc <url>] [--journal <new-path>] (--dry-run | --broadcast)\n" ++
+  "Omit --key-file to enter the private key at a hidden terminal prompt.\n" ++
+  "Dry run reviews one invoice without signing. Broadcasting requires typing SEND for every reviewed transaction.\n" ++
+  "Omit --journal to use a new uniquely named journal in the current directory.\n" ++
+  "--non-interactive explicitly authorizes sending without a SEND prompt and requires --key-file. Reviews and validation checks still run.\n"
 
 private def payInvoiceCommand (args : List String) : IO String := do
   let options ← match parseInvoiceOptions args with
@@ -225,23 +241,27 @@ private def payInvoiceCommand (args : List String) : IO String := do
   if options.help then return invoiceHelp
   let some invoiceFile := options.invoiceFile
     | throw <| IO.userError "error: required option '--invoice-file <path>' not specified"
-  let some keyFile := options.keyFile
-    | throw <| IO.userError "error: required option '--key-file <path>' not specified"
   if options.dryRun == options.experimentalSend then
-    throw <| IO.userError "Choose exactly one invoice mode: --dry-run or --experimental-send."
+    throw <| IO.userError "Choose exactly one invoice mode: --dry-run or --broadcast."
   if options.dryRun && options.journal.isSome then
-    throw <| IO.userError "--journal is only valid with --experimental-send."
+    throw <| IO.userError "--journal is only valid with --broadcast."
   let chain ← match parseChainInput options.chain with
     | .ok value => pure value
     | .error message => throw <| IO.userError message
   let environmentRpc ← IO.getEnv "TORNADO_RPC_URL"
   let rpc := (options.rpc.orElse (fun _ => environmentRpc)).getD (defaultRpc chain)
+  if options.nonInteractive && options.keyFile.isNone then
+    throw <| IO.userError "--non-interactive requires --key-file for deposits."
+  let journal ← if options.experimentalSend then
+      some <$> depositJournalPath options.journal chain
+    else pure none
+  let keyFile ← Tornado.Runtime.NativeSigner.resolveKeyFile options.keyFile journal
   if options.dryRun then
     Tornado.Cli.DepositSend.dryRunPayInvoice invoiceFile keyFile rpc chain
   else
-    let some journal := options.journal
-      | throw <| IO.userError "Experimental invoice send requires a new --journal <path>."
-    Tornado.Cli.DepositSend.experimentalPayInvoice invoiceFile keyFile rpc journal chain false
+    let some journal := journal
+      | throw <| IO.userError "Deposit journal selection failed."
+    Tornado.Cli.DepositSend.experimentalPayInvoice invoiceFile keyFile rpc journal chain false options.nonInteractive
 
 private structure MultiDepositOptions where
   notesFile : Option String := none
@@ -249,8 +269,11 @@ private structure MultiDepositOptions where
   chain : String := "1"
   rpc : Option String := none
   sequential : Bool := false
+  delegated : Bool := false
+  resume : Bool := false
   dryRun : Bool := false
   experimentalSend : Bool := false
+  nonInteractive : Bool := false
   journal : Option String := none
   bundler : Option String := none
   help : Bool := false
@@ -271,10 +294,16 @@ private partial def parseMultiDepositOptions (args : List String)
       parseMultiDepositOptions rest { options with rpc := some value }
   | "--sequential" :: rest =>
       parseMultiDepositOptions rest { options with sequential := true }
+  | "--delegated" :: rest =>
+      parseMultiDepositOptions rest { options with delegated := true }
+  | "--resume" :: rest =>
+      parseMultiDepositOptions rest { options with resume := true }
   | "--dry-run" :: rest =>
       parseMultiDepositOptions rest { options with dryRun := true }
-  | "--experimental-send" :: rest =>
+  | "--broadcast" :: rest =>
       parseMultiDepositOptions rest { options with experimentalSend := true }
+  | "--non-interactive" :: rest =>
+      parseMultiDepositOptions rest { options with nonInteractive := true }
   | "--journal" :: value :: rest =>
       parseMultiDepositOptions rest { options with journal := some value }
   | "--bundler-url" :: value :: rest =>
@@ -298,42 +327,65 @@ private partial def parseMultiDepositOptions (args : List String)
       else .error s!"error: unsupported deposit option '{value}'"
 
 private def multiDepositHelp : String :=
-  "Usage: tornado deposit send --notes-file <path> --key-file <path> [options]\n" ++
-  "Review sequential or Simple7702 deposit calls without signing or submitting.\n" ++
+  "Usage: tornado deposit send --notes-file <path> [--key-file <path>] [options]\n" ++
+  "Deposit notes; choose --dry-run for review or --broadcast to send.\n" ++
+  "One note defaults to ordinary transactions; --delegated explicitly selects a UserOperation.\n" ++
   "  --chain <id>       Ethereum chain ID (default: 1)\n" ++
+  "  --key-file <path>  Optional; omit for hidden terminal entry (never stored as a key file)\n" ++
   "  --rpc <url>        HTTPS chain RPC URL\n" ++
   "  --sequential      Force ordinary transaction planning\n" ++
+  "  --delegated       Force UserOperation deposits; authorize installing/replacing EOA delegation\n" ++
+  "  --resume          Reconcile an existing sequential ETH journal and continue its unexposed suffix\n" ++
   "  --dry-run         Review without signing or submitting\n" ++
   "  --bundler-url <url>  Custom bundler for Simple7702 deposits\n" ++
-  "  --experimental-send --journal <new-path>  Send reviewed transactions with typed approval\n"
+  "  --journal <path>  Optional for new sends (unique file in current directory); required with --resume\n" ++
+  "  --broadcast       Send reviewed transactions after typed approval\n" ++
+  "  --non-interactive  Explicitly authorize sends/delegation without prompts; requires --key-file\n"
 
 private def multiDepositCommand (args : List String) : IO String := do
   let options ← match parseMultiDepositOptions args with
     | .ok value => pure value
     | .error message => throw <| IO.userError message
   if options.help then return multiDepositHelp
+  if options.sequential && options.delegated then
+    throw <| IO.userError "--delegated and --sequential cannot be used together."
+  if options.resume && options.delegated then
+    throw <| IO.userError "--resume preserves the original sequential route and cannot use --delegated."
   if options.dryRun == options.experimentalSend then
-    throw <| IO.userError "Choose exactly one deposit mode: --dry-run or --experimental-send."
-  if options.dryRun && options.journal.isSome then
-    throw <| IO.userError "--journal is only valid with --experimental-send."
+    throw <| IO.userError "Choose exactly one deposit mode: --dry-run or --broadcast."
+  if options.dryRun && options.journal.isSome && !options.resume then
+    throw <| IO.userError "--journal is only valid with --broadcast."
   let some notesFile := options.notesFile
     | throw <| IO.userError "error: required option '--notes-file <path>' not specified"
-  let some keyFile := options.keyFile
-    | throw <| IO.userError "error: required option '--key-file <path>' not specified"
   let chain ← match parseChainInput options.chain with
     | .ok value => pure value
     | .error message => throw <| IO.userError message
   let environmentRpc ← IO.getEnv "TORNADO_RPC_URL"
   let rpc := (options.rpc.orElse (fun _ => environmentRpc)).getD (defaultRpc chain)
+  if options.resume && options.journal.isNone then
+    throw <| IO.userError "--resume requires the original --journal path."
+  if options.nonInteractive && options.keyFile.isNone then
+    throw <| IO.userError "--non-interactive requires --key-file for deposits."
+  if !options.resume then
+    if let some path := options.journal then
+      if ← (System.FilePath.mk path).pathExists then
+        throw <| IO.userError "Journal already exists. Keep it and rerun the same deposit send command with --resume."
+  let journal ← if options.resume then pure options.journal
+    else if options.experimentalSend then some <$> depositJournalPath options.journal chain
+    else pure none
+  let keyFile ← Tornado.Runtime.NativeSigner.resolveKeyFile options.keyFile journal
+  if options.resume then
+    return ← Tornado.Cli.DepositResume.command notesFile keyFile rpc journal.get! chain
+      options.experimentalSend options.nonInteractive
   if options.experimentalSend then
-    let some journal := options.journal
-      | throw <| IO.userError "Experimental deposit sending requires a new --journal path."
+    let some journal := journal
+      | throw <| IO.userError "Deposit journal selection failed."
     let envBundler ← IO.getEnv "TORNADO_BUNDLER_URL"
     let selectedBundler := options.bundler.orElse (fun _ => envBundler)
     let bundler := selectedBundler.getD s!"https://public.pimlico.io/v2/{chainNumber chain}/rpc"
     return ← Tornado.Cli.DepositBatch7702.experimentalAutoSend notesFile keyFile rpc bundler
-      journal chain options.sequential selectedBundler.isSome false
-  Tornado.Cli.DepositMulti.dryRun notesFile keyFile rpc chain options.sequential
+      journal chain options.sequential selectedBundler.isSome false options.delegated options.nonInteractive
+  Tornado.Cli.DepositMulti.dryRun notesFile keyFile rpc chain options.sequential options.delegated
 
 private structure FileOptions where
   file : Option String := none
@@ -573,4 +625,6 @@ def main (args : List String) : IO UInt32 := do
 
 end Tornado.Cli
 
-def main (args : List String) : IO UInt32 := Tornado.Cli.main args
+def main (args : List String) : IO UInt32 := do
+  try Tornado.Cli.main args
+  finally Tornado.Runtime.NativeSigner.clearPromptKey

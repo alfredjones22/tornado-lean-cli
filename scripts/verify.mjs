@@ -135,7 +135,7 @@ function sourceFiles() {
       const name = dir === '.' ? entry.name : `${dir}/${entry.name}`
       if (entry.isSymbolicLink()) throw new Error(`Unexpected source symlink: ${name}`)
       if (entry.isDirectory()) {
-        if (!['.lake', 'reports', 'node_modules', '.git'].includes(entry.name)) visit(name)
+        if (!['.lake', 'reports', 'node_modules', '.git', '.sepolia-tests'].includes(entry.name)) visit(name)
       } else if (entry.isFile() && name.endsWith('.lean')) found.push(name)
     }
   }
@@ -369,11 +369,14 @@ const requiredFocusedTests = {
   'tests/WithdrawalJournalProgram.lean': 'PASS: 18 finite journal program scenarios, exact command/byte prefixes, every before-write/lost-reply cut, partial-claim readmission block, and stale CAS preservation',
   'tests/ReservationAdmission.lean': 'PASS: exact absent query traces, 24 stop/fail-closed query faults, 5 scope guards, route race, partial file, symlink/error and status-independent readmission',
   'tests/WorkerDisclosure.lean': 'PASS: restricted worker capabilities, typed canonical output, fixed failures, and explicit entropy effects',
+  'tests/WorkerProcess.lean': 'PASS: worker exit before stdout EOF, repeated single/batch inspection, timeout, malformed-output and nonzero-exit rejection',
   'tests/BlindingDistribution.lean': 'PASS: exhaustive sampler stream counts, normalization, sequential pair independence, and biased/reused-scalar negative controls',
   'tests/WithdrawalDriver.lean': 'PASS: runnable withdrawal machine, exact reviewed payload, callback fault traces and terminal uncertainty',
   'tests/ProverWorkerWire.lean': 'PASS: strict public prover worker wire and request/result binding',
   'tests/Bundler.lean': 'PASS: bounded bundler codec and estimates, durable exposure order, and ambiguous-send stop',
   'tests/DepositMultiSend.lean': 'PASS: native multi-deposit sequence, durable-before-send, exact transaction/event binding, and ambiguity stop',
+  'tests/ReceiptConfirmations.lean': 'PASS: single-inclusion default, exact block/receipt stability, and bounded RPC-free rejection',
+  'tests/DepositResume.lean': 'PASS: journal-bound five-plus-one resume, read-only preview, exact chain evidence, no replacement, and durable ambiguity',
   'tests/DepositBatch7702.lean': 'PASS: native Simple7702 batches, viem parity, durable delegation exposure, exact events, and ambiguity stop',
   'tests/RecoverySend.lean': 'PASS: recovery candidate binding, review revalidation, journal-before-send fault traces, and status CAS',
   'tests/ImportedAbi.lean': 'PASS: 28 pinned Safe ABI encoding/hash cases, 20 import rejections, and bounded Solidity types',
@@ -413,7 +416,8 @@ const trustedExterns = {
   'Tornado/Runtime/HttpTransport.lean': ['tornado_https_post', 'tornado_https_get'],
   'Tornado/Runtime/NativeSigner.lean': ['tornado_secure_pubkey_from_key_file',
     'tornado_secure_sign_digest_from_key_file', 'tornado_worker_disable_core_dumps',
-    'tornado_verify_public_digest'],
+    'tornado_verify_public_digest', 'tornado_secure_prompt_key',
+    'tornado_secure_clear_prompt_key'],
 }
 const testOnlyExterns = {
   'tests/ReservationAdmissionProcess.lean': ['tornado_test_fault_arm'],
@@ -454,6 +458,7 @@ const requiredTheorems = [
   'Tornado.Spec.ReviewBatchIntent.finalized_preserves_prepared_batch',
   'Tornado.Protocol.DepositIntent.checked_complete_intent',
   'Tornado.Protocol.DepositIntent.checked_ordered_funding',
+  'Tornado.Protocol.DepositIntent.routing_single_default',
   'Tornado.Protocol.DepositIntent.checked_signed_step',
   'Tornado.Protocol.DepositCallsIntent.checked_decoded_steps',
   'Tornado.Cli.DepositSend.planInvoice_success_decodes',
@@ -649,6 +654,7 @@ const requiredTheorems = [
   'Tornado.Protocol.HistoryReducer.applyBatch_success_identity',
   'Tornado.Runtime.HistorySync.acceptComplete_success_fresh',
   'Tornado.Runtime.HistorySync.withinAggregateBytes_sound',
+  'Tornado.Cli.WithdrawalNetwork.lowerGasBid_ethFee_nonincreasing',
   'Tornado.Cli.SmartAccountStatus.confirmed_requires_matching_transaction',
   'Tornado.Cli.SmartAccountStatus.confirmed_requires_matching_inclusion',
   'Tornado.Cli.NullifierSpent.accepted_selection_binds_pool',
@@ -733,7 +739,7 @@ try {
       'tests/SmartAccountStatus.lean',
       'tests/NullifierSpent.lean',
       'tests/ProofBlinding.lean', 'tests/ProverWorkerWire.lean',
-      'tests/DirectWithdrawalIntent.lean', 'tests/WorkerDisclosure.lean',
+      'tests/DirectWithdrawalIntent.lean', 'tests/WorkerDisclosure.lean', 'tests/WorkerProcess.lean',
       'tests/AbiDecode.lean', 'tests/ByteEntropy.lean',
       'tests/BatchWithdrawalIntent.lean',
       'tests/evm/Export.lean', 'tests/evm/ExportDeposit.lean',
@@ -746,6 +752,8 @@ try {
       'tests/BlindingDistribution.lean', 'tests/WithdrawalDriver.lean',
       'tests/ProverWorkerClient.lean', 'tests/ProverWorker.lean',
       'tests/Bundler.lean', 'tests/DepositMultiSend.lean', 'tests/DepositBatch7702.lean',
+      'tests/ReceiptConfirmations.lean',
+      'tests/DepositResume.lean',
       'tests/RecoverySend.lean', 'tests/ImportedAbi.lean', 'tests/RelayerSend.lean',
       'tests/PaymasterPrepare.lean', 'tests/PaymasterPrepareLeadingZero.lean', 'tests/HistorySnapshot.lean',
       'tests/WithdrawalNetwork.lean', 'tests/SponsoredPreparation.lean',
@@ -845,7 +853,7 @@ try {
     'docs/LOCAL_EVM_SCOPE.md',
     'docs/RESERVATION_RECOVERY_SCOPE.md',
     'README.md', 'LICENSE', 'docs/PROOF_SCOPE.md', 'docs/PROOF_BLINDING_SCOPE.md',
-    'docs/WITHDRAWAL_SECURITY_SPEC.md', 'docs/PARITY_MATRIX.md', 'docs/VERIFICATION.md',
+    'docs/WITHDRAWAL_SECURITY_SPEC.md', 'docs/CLI_COVERAGE.md', 'docs/VERIFICATION.md',
     'docs/BN254_G1_SCOPE.md', 'docs/FR_FFT_SCOPE.md', 'docs/GROTH16_MSM_SCOPE.md',
     'docs/CLASSIC_PROOF_PIPELINE_SCOPE.md', 'docs/GROTH16_SCOPE.md', 'docs/WITNESS_VM_SCOPE.md',
     'docs/BN254_PAIRING_STATUS.md', 'docs/CLASSIC_KEY_SCOPE.md',
@@ -865,6 +873,8 @@ try {
     'scripts/check-oracle-compatibility.mjs', 'scripts/generate-note-creation-vectors.mjs',
     'scripts/notes-create-smoke.mjs',
     'scripts/test-protected-io.mjs', 'scripts/test-https-transport.mjs',
+    'scripts/test-interactive-signer.py', 'scripts/test-cli-input-modes.py',
+    'scripts/test-deposit-resume-cli.py',
     'scripts/test-https-get.mjs', 'scripts/test-https-get-boundary.mjs',
     'scripts/test-loopback-http.mjs',
     'scripts/test-attempt-journal.mjs',
@@ -898,6 +908,15 @@ try {
     'native/tornado_https.c', 'native/tornado_secret_sign.c',
     'native/vendor/libsecp256k1/UPSTREAM.md',
     'native/https_get_boundary_test.c',
+    'assets/history/11155111/0x0e999c5285141ccb6dfae68a0921f37abd3e6a87-6ac12c3cdf215493.json.gz',
+    'assets/history/11155111/0x9480be3964642efcd6cebdb3570db8dc0f788908-976c3b43d178bae6.json.gz',
+    'assets/history/11155111/0x8c4a04d872a6c1be37964a21ba3a138525dff50b-ceb6fa3aadea3bf4.json.gz',
+    'assets/history/11155111/0x83091415b54d764e215153ff54b36ccd44122e6e-9d67d34e77947ebc.json.gz',
+    'assets/history/11155111/0x8cc930096b4df705a007c4a039bdfa1320ed2508-d8b706c462583256.json.gz',
+    'assets/history/11155111/0x7ee90edc51c3739af3ee277e09ade3f3d6bad4af-16c70734c312c18a.json.gz',
+    'assets/history/11155111/0x8d10d506d29fc62abb8a290b99f66db27fc43585-4c2d8491cca8b9f4.json.gz',
+    'assets/history/11155111/0x3d1c943dfb2c8d9905b0da0afd18615915ff343a-9d8b31c456aa03bd.json.gz',
+    'assets/history/11155111/0x6921fd1a97441dd603a997ed6ddf388658daf754-364c228163859be7.json.gz',
     'lakefile.lean', 'lean-toolchain',
     'lake-manifest.json']) {
     requireCheck(existsSync(path(file)), `Missing verification input ${file}`)
@@ -1029,7 +1048,7 @@ try {
   requireCheck(run(process.execPath, ['scripts/test-loopback-http.mjs'], 180000).trim() ===
     'Loopback HTTP: IPv4, localhost, IPv6, bounds, redirect, proxy and unsafe URL checks passed',
     'Explicit loopback HTTP or remote-plaintext rejection changed')
-  requireCheck(run('python3', ['scripts/check_history_snapshots.py']).trim() ===
+  requireCheck(run('python3', ['-I', 'scripts/check_history_snapshots.py']).trim() ===
     'PASS: all 29 compiled history snapshot descriptors match the pinned CLI manifest',
     'Compiled history snapshot descriptors differ from the pinned TypeScript manifest')
   const snapshotDir = mkdtempSync(path('tests/.history-snapshot-'))
@@ -1087,6 +1106,15 @@ try {
       'PASS: protected native signer matches Lean and viem public vectors',
       'Protected native signer boundary or public-vector parity changed')
   } finally { rmSync(signerDir, { recursive: true, force: true }) }
+  requireCheck(run('python3', ['-I', 'scripts/test-interactive-signer.py']).trim() ===
+    'PASS: hidden PTY input, native signing, paste isolation, cancellation, EOF, no-TTY and terminal restoration',
+    'Interactive native signer or terminal protections changed')
+  requireCheck(run('python3', ['-I', 'scripts/test-cli-input-modes.py']).trim() ===
+    'PASS: broadcast flag admission, optional account key files, no-TTY failures and resume flag conflicts',
+    'CLI broadcast, resume or interactive key admission changed')
+  requireCheck(run('python3', ['-I', 'scripts/test-deposit-resume-cli.py'], 180000).trim() ===
+    'PASS: actual CLI resume, protected deposit conflicts and single-note routing without broadcast',
+    'Actual journal-backed deposit resume or original claim admission changed')
   const secpTestDir = mkdtempSync(path('tests/.secp-upstream-'))
   try {
     const vendor = 'native/vendor/libsecp256k1'
@@ -1389,31 +1417,31 @@ try {
   }
   for (const [args, expected] of [
     [['deposit', 'send', '--notes-file', '/missing-notes', '--key-file', '/missing-key'],
-      'Choose exactly one deposit mode: --dry-run or --experimental-send.'],
+      'Choose exactly one deposit mode: --dry-run or --broadcast.'],
     [['deposit', 'pay-invoice', '--invoice-file', '/missing-invoice', '--key-file', '/missing-key'],
-      'Choose exactly one invoice mode: --dry-run or --experimental-send.'],
-    [['deposit', 'pay-invoice', '--invoice-file', '/missing-invoice', '--key-file', '/missing-key',
-      '--experimental-send'],
-      'Experimental invoice send requires a new --journal <path>.'],
+      'Choose exactly one invoice mode: --dry-run or --broadcast.'],
+    [['deposit', 'send', '--notes-file', '/missing-notes', '--key-file', '/missing-key',
+      '--broadcast', '--resume'],
+      '--resume requires the original --journal path.'],
     [['withdraw', 'one', '--note-file', '/missing-note', '--recipient',
       '0x1111111111111111111111111111111111111111'],
-      'Choose --dry-run, --preflight or --experimental-send.'],
+      'Choose --dry-run, --preflight or --broadcast.'],
     [['withdraw', 'batch', '--notes-file', '/missing-notes', '--owner-key-file', '/missing-key'],
-      'Choose --dry-run or --experimental-send.'],
+      'Choose --dry-run or --broadcast.'],
     [['smart-account', 'recover', '--owner', '0x1111111111111111111111111111111111111111'],
-      'Choose --dry-run or --experimental-send for recovery.'],
-    [['withdraw', 'one', '--experimental-send', '--yes'],
-      'Experimental withdrawals require typed WITHDRAW approval; --yes is unavailable.'],
-    [['withdraw', 'batch', '--experimental-send', '--yes'],
-      'Experimental withdrawals require typed WITHDRAW approval; --yes is unavailable.'],
-    [['withdraw', 'one', '--experimental-send', '--dry-run'],
-      'Choose --experimental-send separately from --dry-run and --preflight.'],
-    [['withdraw', 'one', '--experimental-send', '--route', 'relayer', '--contract-calls', '/missing-calls'],
+      'Choose --dry-run or --broadcast for recovery.'],
+    [['withdraw', 'one', '--broadcast', '--yes'],
+      'Withdrawals require typed WITHDRAW approval; --yes is unavailable.'],
+    [['withdraw', 'batch', '--broadcast', '--yes'],
+      'Withdrawals require typed WITHDRAW approval; --yes is unavailable.'],
+    [['withdraw', 'one', '--broadcast', '--dry-run'],
+      'Choose --broadcast separately from --dry-run and --preflight.'],
+    [['withdraw', 'one', '--broadcast', '--route', 'relayer', '--contract-calls', '/missing-calls'],
       'Owner keys, contract calls and execution simulation options require the batch 4337 route.'],
-    [['withdraw', 'batch', '--experimental-send', '--note-index', '1'],
+    [['withdraw', 'batch', '--broadcast', '--note-index', '1'],
       'Batch withdrawals require the complete selected backup and the 4337 route.'],
-    [['smart-account', 'recover', '--experimental-send', '--owner-key-file', '/missing-key'],
-      'Experimental recovery requires a new --journal path.'],
+    [['smart-account', 'recover', '--broadcast', '--owner-key-file', '/missing-key'],
+      'Recovery requires a new --journal path.'],
   ]) {
     const result = spawnSync(leanBin, args, { cwd: root, env, encoding: 'utf8',
       timeout: 5000, maxBuffer: 1024 * 1024 })
@@ -1574,8 +1602,9 @@ try {
       sourceTreeSHA256: secpTreeDigest,
       bridge: 'native/tornado_secret_sign.c',
       status: 'PUBLIC_VECTOR_TESTED_NATIVE_SECRET_PATH',
+      interactiveKeys: 'PUBLIC_FIXTURE_PTY_TESTED; NATIVE_ONLY_SESSION; NO_DISK_KEY',
       upstreamTests: 'ONE_ITERATION_PASSED; HIGH_COUNT_CASES_SKIPPED',
-      limitation: 'C, compiler, OS memory behavior, and libsecp256k1 remain trusted; no funded test or complete erasure proof' },
+      limitation: 'C, compiler, OS memory behavior, and libsecp256k1 remain trusted; this gate uses public signer fixtures and does not broadcast transactions; complete erasure is not proved' },
     attemptJournal: { status: 'BOUNDED_TESTED_NOT_CONNECTED',
       maxRecords: 20, crossAttemptNoteClaims: 'LOCAL_INSTANCE_TESTED_NOT_CONNECTED',
       replayRecordRefinement: 'FOUR_GUARD_THEOREMS_AND_FAULT_TESTS',
@@ -1660,25 +1689,25 @@ try {
       fullHandleOpsOrProductionDeploymentProved: false,
       publicOrFundedNetworkTransactions: false },
     limitations: [
-      'Exact CLI differential cases cover pools, deposit plan, notes inspect/invoice, and root version flags. New command modes have focused offline checks, not complete TypeScript differential parity. Backup creation uses random generation with finite compatibility and recovery checks.',
+      'Independent regression cases cover pools, deposit plan, notes inspect/invoice, and root version flags. Other command modes have focused offline checks, not exhaustive behavioral coverage. Backup creation uses random generation with finite reference and recovery checks.',
       'The planner grid and crypto vectors are finite tests, not all-input or cryptographic-security proofs.',
       'A native full-size public fixture authenticates compressed assets, produces exact Groth16 proof bytes, and passes the compiled-key reduced Tate pairing equation. This is finite evidence, not secret-safe proving, a theorem of Groth16 soundness, or deployed-verifier acceptance.',
-      'Experimental direct, relayer and batch withdrawal commands are connected and tested with public fixtures and injected effects only. The isolated native Lean prover and note-derived signer remain variable time and nonzeroizing; worker binary pinning, funded testing and an end-to-end correctness proof remain open.',
-      'A generic pairing helper accepts a caller-supplied key; the compiled Classic wrapper instead fixes every key point to reviewed source. No selected pool or deployed verifier code is authenticated or connected to a command.',
+      'This gate exercises direct, relayer and batch withdrawal commands with public fixtures and injected effects. Separate finite Sepolia ETH execution results are documented in docs/SEPOLIA_LIVE_TESTS.md; they do not cover Classic relayer submission, ERC-20 Tornado pools or maximum-size batches. The isolated native Lean prover and note-derived signer remain variable time and nonzeroizing; worker binary pinning and an end-to-end correctness proof remain open.',
+      'A generic pairing helper accepts a caller-supplied key; the compiled Classic wrapper instead fixes every key point to reviewed source. This does not authenticate deployed pool/verifier code or prove that it implements the compiled Classic key.',
       'A bounded selected-pool Saga/RPC fetch loop, pinned offline assets and protected snapshot cache serve history, compliance report, and withdrawal preflight. The cache rechecks checkpoints and handles reorgs, but provider completeness and consensus are not proved. An endpoint can omit or fabricate chain data.',
       'The history RPC is trusted with deposit-withdrawal linkage: selected deposit receipt and exact-block nullifier-spent queries can be correlated by its operator. Responses are not authenticated state proofs.',
       'The sponsored runner uses the proved command machine. The actual reservation interpreter additionally has a conditional filesystem/crash model and native process-cut tests; C/POSIX durability, signer behavior and absence of extra callback effects remain assumptions. Other send runners share journal helpers but lack complete command refinement.',
       'The original proof worker has a conditional terminal-event bound of 2^-251 relative to a single witness-free reference, retaining later failures and sampler exhaustion. Original input acceptance constructs its complete witness and every R1CS check. The output result retains explicit key/H composition, honest setup/query/QAP and IID uniform entropy contracts; its reference uses abstract setup trapdoor scalars, not an efficient public simulator. It does not prove malformed-input or other worker modes\' cryptographic privacy, secret-independent timing/resources, physical interpreter behavior or secure erasure.',
       'Local EVM checks use actual Classic verifier/account/paymaster code and native batch output, but synthetic EntryPoint/token/pool/address placement. They do not run full handleOps or establish deployed contract identity, consensus, or protocol correctness.',
-      'Experimental pay-invoice can sign and broadcast with a local invoice claim, sender lock, conservative maximum-gas cap, and twelve-confirmation gate. Its key-file signer uses a protected native libsecp256k1 boundary, but the C/compiler/OS behavior, complete erasure, live HTTP effects, deployed contracts, and fund safety are not end-to-end proved or funded-testnet validated.',
-      'Sequential and Simple7702 multi-note deposits have experimental live adapters with offline fault tests and pinned viem vectors. Signed delegation is journaled before estimation; no funded end-to-end test or correctness proof was completed.',
-      'Experimental recovery and withdrawal live adapters require explicit mode selection and typed approval. Development sent no funded transactions. Offline fault tests and exact event reconciliation do not establish complete command parity or production fund safety. Shared sender locks coordinate only one protected key directory; copies elsewhere are not globally coordinated.',
+      'Pay-invoice can sign and broadcast with a local invoice claim, sender lock, conservative maximum-gas cap, and exact single-inclusion gate. Its key-file signer uses a protected native libsecp256k1 boundary, but the C/compiler/OS behavior, complete erasure, live HTTP effects, deployed contracts, and fund safety are not end-to-end proved; this gate does not perform funded network tests.',
+      'Sequential and Simple7702 multi-note deposits have experimental live adapters with offline fault tests and pinned viem vectors. Signed delegation is journaled before estimation; separate Sepolia ETH execution results are documented in docs/SEPOLIA_LIVE_TESTS.md, while end-to-end correctness remains unproved.',
+      'Experimental recovery and withdrawal live adapters require explicit --broadcast and default to typed approval; --non-interactive explicitly skips confirmation. This gate itself sends no network transactions. Offline fault tests and exact event reconciliation do not establish complete command correctness or production fund safety. Shared sender locks coordinate only one protected key directory; copies elsewhere are not globally coordinated.',
       'Lean proofs cover selected native definitions; they do not prove the C OS bindings, Ethereum consensus, deployed contracts or filesystem durability.',
     ],
   }
   writeFileSync(reportPath, JSON.stringify(result, null, 2) + '\n')
   console.log(`PASS_WITH_LIMITATIONS: ${proofs.length} Lean theorems, ${crypto.length} crypto vector suites, ` +
-    '11 note identities, 11 invoices, 1860 grid cases, 900 choice cases, 38 status JSON cases, 15 ABI vectors, 9 UserOperation v0.8 vectors, 20 RLP vectors, 28275 R1CS constraints, 28300 full witness slots, 7 event vectors, complete pinned key parse, batch policy tests, 156/156 initial read-only CLI cases plus 6 note-file cases. Experimental deposit sending is not production certified; full money-moving parity: NOT CLAIMED.')
+    '11 note identities, 11 invoices, 1860 grid cases, 900 choice cases, 38 status JSON cases, 15 ABI vectors, 9 UserOperation v0.8 vectors, 20 RLP vectors, 28275 R1CS constraints, 28300 full witness slots, 7 event vectors, complete pinned key parse, batch policy tests, 156/156 read-only reference cases plus 6 note-file cases. Experimental deposit sending is not production certified; full command correctness: NOT PROVED.')
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   writeFileSync(reportPath, JSON.stringify({ schemaVersion: 1, runId, startedAtUTC,

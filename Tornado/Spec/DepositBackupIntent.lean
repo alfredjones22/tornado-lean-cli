@@ -142,17 +142,19 @@ theorem source_seeded_construct (source : Source chain) (phrase : String)
 plan is indexed by the public items constructed from the original backup. -/
 theorem source_plan_success (source : Source chain) (sender : Nat)
     (readings : DepositMulti.Readings) (forceSequential : Bool) (output : DepositMulti.Plan)
-    (built : DepositMulti.plan source.items chain sender readings forceSequential = .ok output) :
+    {forceDelegated : Bool}
+    (built : DepositMulti.plan source.items chain sender readings forceSequential forceDelegated = .ok output) :
     ∃ raw input meaning,
       formatDepositBackup source.notes none = .ok raw ∧
       DepositMulti.publicItems raw chain = .ok source.items ∧
-      DepositMulti.planIntent source.items chain sender readings forceSequential = .ok input ∧
+      DepositMulti.planIntent source.items chain sender readings forceSequential forceDelegated = .ok input ∧
       Tornado.Protocol.DepositIntent.expected input = .ok meaning ∧
       Tornado.Protocol.DepositIntent.decodePlan (DepositMulti.planEncoding output) = .ok meaning ∧
       Tornado.Protocol.DepositIntent.PlanPolicy input meaning := by
   obtain ⟨raw, formatted, _, extracted⟩ := source_construct source
   obtain ⟨input, meaning, original, expected, decoded, policy⟩ :=
-    DepositMulti.plan_success_decodes source.items chain sender readings forceSequential output built
+    DepositMulti.plan_success_decodes source.items chain sender readings forceSequential output
+      (forceDelegated := forceDelegated) built
   exact ⟨raw, input, meaning, formatted, extracted, original, expected, decoded, policy⟩
 
 /-- Every public item starts from a rehashed parsed private note; public

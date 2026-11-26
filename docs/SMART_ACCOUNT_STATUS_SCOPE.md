@@ -1,7 +1,7 @@
 # Smart-account recovery status
 
 `smart-account status --journal <path> [--rpc <url>]` reads a protected
-TypeScript-compatible recovery journal, checks the selected RPC's chain ID,
+recovery journal, checks the selected RPC's chain ID,
 and queries the recorded transaction and receipt. It reports `confirmed` only
 when the indexed transaction has the exact recorded hash, owner sender,
 smart-account destination, zero value, type-2 envelope, calldata hash, and selected chain; the receipt must

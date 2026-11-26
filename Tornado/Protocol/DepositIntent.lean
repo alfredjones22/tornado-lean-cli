@@ -1,5 +1,6 @@
 import Tornado.Protocol.Abi
 import Tornado.Protocol.TypedTransactionDecode
+import Tornado.Domain.Simple7702
 
 /-! Public deposit intent. Expected steps are numeric catalog/request fields;
 the encoded step projections are independently decoded before comparison.
@@ -17,6 +18,7 @@ inductive Mode where
 
 inductive Reason where
   | forcedSequential | contractOrDelegated | singleDeposit | undelegatedEOA
+  | forcedDelegated | compatibleDelegation
   deriving Inhabited, DecidableEq, BEq
 
 structure EncodedStep where
@@ -56,12 +58,14 @@ structure Input where
   sender : Nat
   chainId : Nat
   actualChainId : Nat
-  senderHasCode : Bool
+  senderCode : Array UInt8 := #[]
   ethBalance : Nat
   tokenBalance : Nat
   pools : Array PoolReading
   forceSequential : Bool
+  forceDelegated : Bool := false
   limit : Nat
+  entryPointGasCredit : Nat := 0
   deriving Inhabited
 
 structure Meaning where
@@ -185,6 +189,11 @@ def chunks : Nat → Array Item → Nat → Except String (Array (Array Item))
 the indexed reading snapshot. Later 7702 chunks deliberately contain deposits
 only; their actual approvals are determined by fresh forced replanning. -/
 def expected (input : Input) : Except String PlanMeaning := do
+  if input.forceSequential && input.forceDelegated then
+    throw "Sequential and delegated deposit routes cannot both be forced."
+  let code := ByteArray.mk input.senderCode
+  if input.forceDelegated && !Tornado.Domain.Simple7702.mayForceDelegated code then
+    throw "Forced delegation requires an EOA or an EIP-7702 delegation designator."
   if input.items.isEmpty || input.items.size > 100 || input.limit < 2 || input.limit > 12 ||
       input.sender == 0 || input.sender >= Abi.maxAddress || input.chainId != input.actualChainId then
     throw "Invalid deposit semantic scope."
@@ -201,28 +210,60 @@ def expected (input : Input) : Except String PlanMeaning := do
     let _ ← reading input item
     commitments := commitments.push item.commitment
   let amount := total input.items
+  if input.entryPointGasCredit >= Abi.maxUint256 then
+    throw "EntryPoint gas credit is outside uint256."
+  let usesGasCredit := !input.forceSequential &&
+    (input.forceDelegated || (input.items.size > 1 &&
+      (code.isEmpty || Tornado.Domain.Simple7702.isCompatible code))) &&
+    input.entryPointGasCredit > 0
   if first.token.isSome then
-    if input.tokenBalance < amount || input.ethBalance == 0 then
+    if input.tokenBalance < amount || (input.ethBalance == 0 && !usesGasCredit) then
       throw "Insufficient deposit intent balance."
-  else if input.ethBalance <= amount then throw "Insufficient deposit ETH intent balance."
+  else if input.ethBalance < amount || (input.ethBalance == amount && !usesGasCredit) then
+    throw "Insufficient deposit ETH intent balance."
   if input.forceSequential then
     return {
       mode := .sequential, reason := .forcedSequential,
       noteCount := input.items.size, amount, batches := #[← sequentialSteps input input.items] }
-  if input.senderHasCode then
+  if !input.forceDelegated && input.items.size == 1 then
+    return {
+      mode := .sequential, reason := .singleDeposit,
+      noteCount := 1, amount, batches := #[← sequentialSteps input input.items] }
+  let compatible := Tornado.Domain.Simple7702.isCompatible code
+  if !input.forceDelegated && !compatible && !code.isEmpty then
     return {
       mode := .sequential, reason := .contractOrDelegated,
       noteCount := input.items.size, amount, batches := #[← sequentialSteps input input.items] }
   let selected ← chunks 100 input.items input.limit
   let firstSteps ← sequentialSteps input selected[0]!
-  if input.items.size == 1 && firstSteps.size == 1 then
-    return {
-      mode := .sequential, reason := .singleDeposit,
-      noteCount := 1, amount, batches := #[firstSteps] }
   let later := (selected.extract 1 selected.size).map (fun chunk => chunk.map deposit)
   return {
-    mode := .simple7702, reason := .undelegatedEOA,
+    mode := .simple7702,
+    reason := if input.forceDelegated then .forcedDelegated
+      else if compatible then .compatibleDelegation else .undelegatedEOA,
     noteCount := input.items.size, amount, batches := #[firstSteps] ++ later }
+
+/-- The routing decision is bound to the original complete code bytes, note
+count and both force flags. One note defaults to ordinary transactions;
+forced delegation admits only empty code or a valid designator. -/
+def RoutingPolicy (input : Input) (meaning : PlanMeaning) : Prop :=
+  ¬ (input.forceSequential = true ∧ input.forceDelegated = true) ∧
+  (if input.forceSequential then
+    meaning.mode = .sequential ∧ meaning.reason = .forcedSequential
+  else if input.forceDelegated then
+    Tornado.Domain.Simple7702.mayForceDelegated (ByteArray.mk input.senderCode) = true ∧
+    meaning.mode = .simple7702 ∧ meaning.reason = .forcedDelegated
+  else if input.items.size = 1 then
+    meaning.mode = .sequential ∧ meaning.reason = .singleDeposit
+  else if Tornado.Domain.Simple7702.isCompatible (ByteArray.mk input.senderCode) then
+    meaning.mode = .simple7702 ∧ meaning.reason = .compatibleDelegation
+  else if input.senderCode.isEmpty then
+    meaning.mode = .simple7702 ∧ meaning.reason = .undelegatedEOA
+  else meaning.mode = .sequential ∧ meaning.reason = .contractOrDelegated)
+
+instance (input : Input) (meaning : PlanMeaning) : Decidable (RoutingPolicy input meaning) := by
+  unfold RoutingPolicy
+  infer_instance
 
 /-- Explicit conservation requirements over decoded calls. Every selected
 commitment is funded exactly once and in order, with the catalog pool and
@@ -232,9 +273,8 @@ def PlanPolicy (input : Input) (meaning : PlanMeaning) : Prop :=
   ((meaning.batches.toList.flatMap (·.toList)).filter (fun step => step.kind == .deposit)) =
     (input.items.map deposit).toList ∧
   0 < meaning.batches.size ∧ meaning.batches.size ≤ 100 ∧
+  RoutingPolicy input meaning ∧
   (if meaning.mode = .sequential then meaning.batches.size = 1 else
-    input.forceSequential = false ∧ input.senderHasCode = false ∧
-    meaning.reason = .undelegatedEOA ∧
     meaning.batches.all (fun steps =>
       let count := (steps.filter (fun step => step.kind == .deposit)).size
       decide (0 < count ∧ count ≤ input.limit ∧ steps.size ≤ 15)) = true)
@@ -305,6 +345,30 @@ theorem checked_ordered_funding (input : Input) (plan : EncodedPlan) (checked : 
     (checked.meaning.batches.toList.flatMap (·.toList)).filter (fun step => step.kind == .deposit) =
       (input.items.map deposit).toList :=
   ⟨checked.policy.1, checked.policy.2.1, checked.policy.2.2.1⟩
+
+theorem checked_routing (input : Input) (plan : EncodedPlan) (checked : Checked input plan) :
+    RoutingPolicy input checked.meaning := checked.policy.2.2.2.2.2.1
+
+theorem routing_compatible_auto (input : Input) (meaning : PlanMeaning)
+    (policy : RoutingPolicy input meaning) (sequential : input.forceSequential = false)
+    (forced : input.forceDelegated = false)
+    (multiple : input.items.size ≠ 1)
+    (compatible : Tornado.Domain.Simple7702.isCompatible (ByteArray.mk input.senderCode) = true) :
+    meaning.mode = .simple7702 ∧ meaning.reason = .compatibleDelegation := by
+  simpa [RoutingPolicy, sequential, forced, multiple, compatible] using policy
+
+theorem routing_single_default (input : Input) (meaning : PlanMeaning)
+    (policy : RoutingPolicy input meaning) (sequential : input.forceSequential = false)
+    (forced : input.forceDelegated = false) (single : input.items.size = 1) :
+    meaning.mode = .sequential ∧ meaning.reason = .singleDeposit := by
+  simpa [RoutingPolicy, sequential, forced, single] using policy
+
+theorem routing_forced_admission (input : Input) (meaning : PlanMeaning)
+    (policy : RoutingPolicy input meaning) (sequential : input.forceSequential = false)
+    (forced : input.forceDelegated = true) :
+    Tornado.Domain.Simple7702.mayForceDelegated (ByteArray.mk input.senderCode) = true ∧
+      meaning.mode = .simple7702 ∧ meaning.reason = .forcedDelegated := by
+  simpa [RoutingPolicy, sequential, forced] using policy
 
 def TransactionMatches (requested actual : Rlp.Transaction1559) : Prop :=
   actual.chainId = requested.chainId ∧ actual.nonce = requested.nonce ∧
@@ -379,4 +443,8 @@ end Tornado.Protocol.DepositIntent
 #print axioms Tornado.Protocol.DepositIntent.checked_complete_intent
 #print axioms Tornado.Protocol.DepositIntent.checked_sequential_intent
 #print axioms Tornado.Protocol.DepositIntent.checked_ordered_funding
+#print axioms Tornado.Protocol.DepositIntent.checked_routing
+#print axioms Tornado.Protocol.DepositIntent.routing_compatible_auto
+#print axioms Tornado.Protocol.DepositIntent.routing_single_default
+#print axioms Tornado.Protocol.DepositIntent.routing_forced_admission
 #print axioms Tornado.Protocol.DepositIntent.checked_signed_step

@@ -1,11 +1,10 @@
 # Native Lean pool-history reducer scope
 
 `Tornado/Protocol/HistoryReducer.lean` is a pure selected-pool replay component.
-It is based on the pinned `tornado-cli-new-era` commit
-`daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7` and its
-`@kohaku-eth/tornado-cash@0.1.0-alpha.38` state manager. The native history
-orchestrator uses it for reports, preflight and experimental withdrawal
-sessions; fetching and persistence are separate runtime components.
+The native history orchestrator uses it for reports, preflight and
+experimental withdrawal sessions; fetching and persistence are separate runtime
+components. Independent Merkle-root fixtures retain their upstream package and
+source identities.
 
 ## Implemented
 
@@ -17,14 +16,13 @@ sessions; fetching and persistence are separate runtime components.
   cursor, replay before a saved finalized cursor, a regressed finality claim,
   wrong-chain/pool events, malformed logs, out-of-order events, duplicate
   commitments or nullifiers, and missing/duplicate leaf indices. It prunes
-  records from the replay start before adding replacement events. This models
-  the SDK's rewind and `prunePoolFromBlock` transition, with stricter rejection
-  of duplicate Map keys and malformed cached state.
+  records from the replay start before adding replacement events. Duplicate
+  keys and malformed cached state are rejected.
 - The supplied `onchainClaimBlock` must equal the replay coverage block.
   The resulting deposit count must equal the supplied same-block leaf count.
   A nonempty deposit tree is rebuilt with native Lean MiMC and must equal the
-  supplied same-block root. Empty trees retain the supplied root, matching
-  the SDK's empty-tree treatment. A partial Saga range therefore cannot be
+  supplied same-block root. Empty trees retain the supplied root. A partial
+  Saga range therefore cannot be
   checked against a root from the later captured head.
 - `applySaga` and `applyRpc` bind the pure reducer to the selected pool and
   already validated Saga or RPC event containers. The reducer re-decodes
@@ -32,9 +30,8 @@ sessions; fetching and persistence are separate runtime components.
   caller.
 - A finalized cursor is never advanced just because the scan began there.
   If the supplied finalized head is before registration, the result keeps no
-  finalized cursor. This is intentionally stricter than the alpha.38 SDK's
-  `max(fromBlock, finalizedHead)` assignment, which could overstate finality
-  when a provider supplies a stale finality head.
+  finalized cursor. A stale provider finality head must not cause the scan
+  start to be presented as finalized.
 
 ## Proofs and checks
 

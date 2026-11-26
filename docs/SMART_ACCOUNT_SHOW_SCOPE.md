@@ -2,7 +2,7 @@
 
 Tornado.Cli.SmartAccountShow.showCommand implements the read-only
 smart-account show --owner <address> [--chain <id>] [--rpc <url>] command.
-It follows the pinned TypeScript command's defaults and output order: owner,
+It displays owner,
 deterministic smart-account address, deployment state, EntryPoint nonce,
 supported-asset balances in catalog order, and EntryPoint deposit. Chain 1 is
 the default. --rpc, TORNADO_RPC_URL, and then the pinned catalog's default

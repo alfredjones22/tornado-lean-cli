@@ -71,10 +71,10 @@ the proof, and checks the exact 256 serialized bytes and SHA-256 against
 [`groth16-full-public-proof.json`](../fixtures/groth16-full-public-proof.json).
 That fixture comes from the independent
 [`generate-full-public-proof.mjs`](../scripts/generate-full-public-proof.mjs)
-oracle: sibling `tornado-cli-new-era` commit
-`daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7`, pinned
-`micro-zk-proofs@0.3.1`, noble BN254 v2.2.0, the authenticated public key,
-and the pinned public witness. The oracle runs the SDK's `createProof` using
+oracle using pinned `micro-zk-proofs@0.3.1`, noble BN254 v2.2.0, the
+authenticated public key, and the pinned public witness. The fixture and
+generator retain the exact source identity and asset hashes. The oracle runs
+the SDK's `createProof` using
 fixed test blinding scalars `r=1`, `s=2`. Its `--check` mode regenerates and
 compares the fixture. These are deliberately public test values, not secure
 production blinding.
@@ -84,7 +84,7 @@ wall time (75.30 seconds user CPU, 158,105,600 bytes peak resident memory);
 the Lean-reported route time was 75,605 ms. The independently pinned SDK
 oracle also produced identical bytes, whose SHA-256 is
 `db2b44928c30a739ce3a26191db4d83698277b758f642751d8e9a083f9fa78db`.
-This establishes exact output parity for one public full-size fixture, not
+This establishes exact agreement for one public full-size fixture, not
 general Groth16 correctness or deployed-verifier acceptance. MSM uses
 windowed buckets with 4, 6, or 10-bit windows based on point count.
 
@@ -93,6 +93,7 @@ experimental worker samples fresh blinding from kernel entropy, authenticates
 assets, checks the witness and verifies the serialized public proof. Parent
 adapters bind reviewed inputs and revalidate known roots and spent status.
 Those checks do not prove side-channel safety, trusted-setup
-soundness or deployed verifier identity. Development uses public unfunded
-fixtures only. Production secret safety and deployed-code authentication are
-not established.
+soundness or deployed verifier identity. The arithmetic verification gate
+uses public unfunded fixtures; separate finite [Sepolia execution results](SEPOLIA_LIVE_TESTS.md)
+cover the tested ETH command paths. Production secret safety and deployed-code
+authentication are not established.

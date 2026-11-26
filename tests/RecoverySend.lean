@@ -257,11 +257,11 @@ def main : IO UInt32 := do
   require ((← creates.get) == 3 && (← removals.get) == 2)
     "Exact successful completion failed to release the sender lock."
   for args in [
-      ["--experimental-send"],
-      ["--experimental-send", "--owner-key-file", "/missing"],
-      ["--experimental-send", "--journal", "/missing"],
-      ["--experimental-send", "--dry-run"],
-      ["--experimental-send", "--yes"]] do
+      ["--broadcast"],
+      ["--broadcast", "--owner-key-file", "/missing"],
+      ["--broadcast", "--dry-run"],
+      ["--broadcast", "--non-interactive", "--journal", "/public-journal-fixture"],
+      ["--broadcast", "--yes"]] do
     require (← rejects <| RecoverySend.recoverCommand args)
       "An invalid live recovery command reached a network or signing operation."
   IO.println "PASS: recovery candidate binding, review revalidation, journal-before-send fault traces, and status CAS"

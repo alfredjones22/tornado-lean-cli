@@ -144,6 +144,7 @@ private structure Options where
   rpc : Option String := none
   journal : Option String := none
   experimentalSend : Bool := false
+  nonInteractive : Bool := false
   dryRun : Bool := false
   deriving Inhabited
 
@@ -151,10 +152,11 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
     Except String Options :=
   match args with
   | [] => .ok options
-  | "--experimental-send" :: rest =>
+  | "--broadcast" :: rest =>
     if options.experimentalSend then .error "Duplicate recovery send flag."
     else parseOptions rest { options with experimentalSend := true }
   | "--dry-run" :: rest => parseOptions rest { options with dryRun := true }
+  | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
   | "--owner" :: value :: rest =>
     if options.owner.isSome then .error "Duplicate recovery owner option."
     else parseOptions rest { options with owner := some value }
@@ -194,13 +196,13 @@ private def absolutePath (raw : String) : IO String := do
   return if (System.FilePath.mk raw).isAbsolute then raw else (current / raw).toString
 
 private def help : String :=
-  "Usage: tornado smart-account recover --owner-key-file <path> (--dry-run | --experimental-send --journal <new-path>) [options]\n\n" ++
+  "Usage: tornado smart-account recover [--owner-key-file <path>] (--dry-run | --broadcast --journal <new-path>) [options]\n\n" ++
   "Recover supported balances and EntryPoint deposits with an owner-paid transaction.\n" ++
   "  --owner <address>     Expected owner; address-only dry run is also supported\n" ++
   "  --receiver <address>  Recovery recipient (default: owner)\n" ++
   "  --chain <id>          Ethereum chain ID (default: 1)\n" ++
   "  --rpc <url>           HTTPS chain RPC URL\n" ++
-  "Experimental sending requires typing RECOVER after the exact transaction review.\n"
+  "Sending requires RECOVER approval, or explicit --non-interactive authorization with --owner-key-file. All reviews and checks still run.\n"
 
 /-- Experimental live adapter. It neither chooses an existing
 journal for retry nor clears an uncertain prior sender lock. The account is
@@ -208,21 +210,20 @@ predicted locally and its identity and sweep balances are read again after
 approval, before the protected signer can be entered. -/
 def recoverCommand (args : List String) : IO String := do
   if args.contains "--help" || args.contains "-h" then return help
-  if !args.contains "--experimental-send" then
+  if !args.contains "--broadcast" then
     if !args.contains "--dry-run" then
-      fail "Choose --dry-run or --experimental-send for recovery."
+      fail "Choose --dry-run or --broadcast for recovery."
     return (← SmartAccountRecover.recoverCommand args)
   let options ← checked <| parseOptions args
   if options.dryRun || !options.experimentalSend then
-    fail "Choose either --dry-run or --experimental-send for recovery."
-  let some keyFile := options.ownerKeyFile
-    | fail "Experimental recovery requires --owner-key-file."
+    fail "Choose either --dry-run or --broadcast for recovery."
   let some journalFile := options.journal
-    | fail "Experimental recovery requires a new --journal path."
+    | fail "Recovery requires a new --journal path."
   let chain ← checked <| parseChainInput options.chain
-  let keyPath ← absolutePath keyFile
+  if options.nonInteractive && options.ownerKeyFile.isNone then
+    fail "--non-interactive requires --owner-key-file for recovery sending."
+  let keyPath ← NativeSigner.resolveKeyFile options.ownerKeyFile options.journal
   let journalPath ← absolutePath journalFile
-  let _ ← (System.FilePath.mk keyPath).symlinkMetadata
   let owner ← NativeSigner.addressFromProtectedFile keyPath
   if let some raw := options.owner then
     if (← checked <| SmartAccountShow.parseOwner raw) != owner then
@@ -262,9 +263,10 @@ def recoverCommand (args : List String) : IO String := do
             "Dry run complete. No recovery transaction was signed or submitted.\n" ""
           IO.println s!"Journal: {journalPath}"
           IO.println transactionReview
-          IO.println "Type RECOVER to sign and submit this owner-paid recovery transaction:"
-          let answer ← (← IO.getStdin).getLine
-          if jsTrim answer != "RECOVER" then fail "Recovery cancelled before signing."
+          if !options.nonInteractive then
+            IO.println "Type RECOVER to sign and submit this owner-paid recovery transaction:"
+            let answer ← (← IO.getStdin).getLine
+            if jsTrim answer != "RECOVER" then fail "Recovery cancelled before signing."
         rereview := SmartAccountRecover.inspectWith chain owner recipient read
         createJournal := WithdrawalJournalProgram.createProtected journalPath
         replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath

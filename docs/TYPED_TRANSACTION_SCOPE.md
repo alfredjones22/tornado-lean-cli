@@ -10,9 +10,9 @@ leading-zero integers, malformed nested access/authorization lists, extra
 fields, and trailing bytes. An accepted result carries a Lean proof that
 re-encoding its decoded fields produces the exact original byte array.
 
-The [fixture](../fixtures/typed-transactions.json) was generated from the pinned
-`tornado-cli-new-era` dependency `viem@2.55.19` with a public test key of scalar
-one. [`TypedTransaction.lean` tests](../tests/TypedTransaction.lean) compare four
+The [fixture](../fixtures/typed-transactions.json) was generated with pinned
+`viem@2.55.19` and a public test key of scalar one.
+[`TypedTransaction.lean` tests](../tests/TypedTransaction.lean) compare four
 type-4 transaction shapes, their unsigned signing hashes, simple-signed bytes
 and hashes, and native-signed bytes and hashes; one native-signed EIP-1559
 transaction; and three native EIP-7702 authorization signatures. It also
@@ -33,11 +33,10 @@ properties of the Lean implementation. The
 finite viem vectors support compatibility for selected cases, not all-input
 equivalence or ECDSA security.
 
-The pinned TypeScript CLI uses EIP-1559 transactions for sequential deposits
-and smart-account recovery. Its EIP-7702 authorization is currently carried in
-an ERC-4337 UserOperation rather than a type-4 EOA transaction; type-4 support
-here is a dependency-completeness step and is not a claim of current command
-parity. In either route, a caller must independently obtain and verify chain
+Sequential deposits and smart-account recovery use EIP-1559 transactions.
+Delegated deposits carry EIP-7702 authorization in an ERC-4337 UserOperation;
+the type-4 serializer is a separate protocol primitive. In either route, a
+caller must independently obtain and verify chain
 ID, pending nonce, gas and fee values, address ownership, delegation target,
 and call data; durably reserve the signed hash before exposing the operation;
 and reconcile an ambiguous send by the exact chain receipt and events. None

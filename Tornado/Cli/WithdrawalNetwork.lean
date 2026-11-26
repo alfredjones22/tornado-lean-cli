@@ -25,17 +25,20 @@ structure Settings where
 structure Transport where
   call : String → Nat → JsonRpc.Method → Array Json → IO JsonRpc.Reply
   nowMs : IO Nat
+  sleepMs : Nat → IO Unit := fun ms => IO.sleep ms.toUInt32
 
 structure Client where
   rpc : JsonRpc.Method → Array Json → IO Json
   bundler : JsonRpc.Method → Array Json → IO Json
   send : JsonRpc.Method → Array Json → IO Json
   estimate : Array Json → IO PaymasterPrepare.EstimateReply
-  simulate : UserOperation → List Events.ExpectedWithdrawal → PaymasterPrepare.Estimation → IO Bool
+  simulate : UserOperation → List Events.ExpectedWithdrawal → PaymasterPrepare.Estimation → Bundler.Bounds → IO Bool
   checkChain : IO Unit
   blockNumber : IO Nat
   nonce : Nat → IO Nat
   revalidateGasPrice : SponsoredWithdrawal.Gas → IO Unit
+  /-- Pre-review only, for routes without arbitrary post-withdrawal calls. -/
+  refreshGasBidDownward : SponsoredWithdrawal.Gas → Bundler.Bounds → IO SponsoredWithdrawal.Gas
 
 private def fail : IO α := throw <| IO.userError "Withdrawal network request failed or was rejected."
 
@@ -73,15 +76,44 @@ def transportUnavailable (error : IO.Error) : Bool :=
   | .userError message => message == "HTTPS transport unavailable"
   | _ => false
 
-/-- Explicit validation failures and revert data remain rejection. A narrowly
-identified AA95 execution-out-of-gas response may trigger a bounded increase
-in execution gas. Opaque -32603 is the only RPC-estimator outage class. -/
-def classifyEstimate (reply : JsonRpc.Reply) : PaymasterPrepare.EstimateReply :=
+private def hexDigit (char : Char) : Bool :=
+  ('0' ≤ char && char ≤ '9') || ('a' ≤ char && char ≤ 'f')
+
+/-- Recognize exactly a nonzero ABI-encoded CallGasLimitNonZero(uint256)
+token. Truncated/extended words, zero arguments and embedded selector text
+cannot downgrade an arbitrary validation failure into availability. -/
+private def nonzeroCallGasRevert (message : String) : Bool := Id.run do
+  let chars := message.toLower.toList.toArray
+  for index in [0:chars.size] do
+    if index > 0 && (chars[index - 1]!.isAlphanum || chars[index - 1]! == '_') then continue
+    if index + 74 > chars.size then continue
+    let token := String.ofList (chars.extract index (index + 74)).toList
+    if !token.startsWith "0x54107e37" then continue
+    let word := String.ofList (token.toList.drop 10)
+    if !word.toList.all hexDigit || word.toList.all (· == '0') then continue
+    if index + 74 < chars.size && hexDigit chars[index + 74]! then continue
+    return true
+  return false
+
+private def validationOnlyEstimate (params : Array Json) : Bool :=
+  params.size == 3 && params[0]?.any (fun operation =>
+    ((operation.getObjVal? "callData").bind Json.getStr?).toOption == some "0x" &&
+    ((operation.getObjVal? "callGasLimit").bind Json.getStr?).toOption == some "0x0")
+
+/-- Validation failures remain rejection except the SDK's known estimator
+incompatibility: AA33 + exact nonzero CallGasLimitNonZero for an operation
+whose calldata and execution limit are both empty/zero. Direct-single
+preparation can automatically consume only this known-incompatibility result;
+all other outages retain their separate policy and eligibility gates. -/
+def classifyEstimate (reply : JsonRpc.Reply) (params : Array Json := #[]) : PaymasterPrepare.EstimateReply :=
   match reply with
   | .success result => .estimated result
   | .failure code message data =>
     let lower := message.toLower
-    if !errorHasData data && code == -32521 && aaCode message (some 95) &&
+    if code == -32501 && !errorHasData data && aaCode message (some 33) &&
+        validationOnlyEstimate params && nonzeroCallGasRevert message then
+      .unavailable .validationOnlyEstimator
+    else if !errorHasData data && code == -32521 && aaCode message (some 95) &&
         has lower "execution" && (has lower "out of gas" || has lower "out-of-gas") then
       .executionOutOfGas
     else if code == -32603 && !errorHasData data && !explicitFailure message then
@@ -151,6 +183,46 @@ private def hostReference (read : JsonRpc.Method → Array Json → IO Json) : I
     let tip ← try quantity (← read .maxPriorityFee #[]) catch _ => pure 0
     return (base, tip)
 
+private def gasReferenceUnavailable : IO α :=
+  throw <| IO.userError
+    "Could not refresh network gas prices. Check --rpc or try another endpoint."
+
+private def diagnosticNat (value : Nat) : String :=
+  if value < 2 ^ 256 then toString value else "at least 2^256"
+
+private def gasPriceDetails (gas : SponsoredWithdrawal.Gas) (base tip : Nat) : String :=
+  s!" Fees in wei/gas: current base {diagnosticNat base}; reference priority {diagnosticNat tip}; prepared maxFee {diagnosticNat gas.maxFee}; prepared priority {diagnosticNat gas.priority}."
+
+/-- A bid refresh changes only prices, never gas limits or the proved fee.
+The caller still checks the resulting bid against fresh host price evidence. -/
+def acceptDownwardGas (original candidate : SponsoredWithdrawal.Gas)
+    (bounds : Bundler.Bounds := {}) : Except String SponsoredWithdrawal.Gas := do
+  if candidate.verification != original.verification || candidate.execution != original.execution ||
+      candidate.preVerification != original.preVerification ||
+      candidate.paymasterVerification != original.paymasterVerification || candidate.postOp != original.postOp then
+    throw "Gas refresh changed a prepared gas limit."
+  if candidate.maxFee > original.maxFee || candidate.priority > original.priority then
+    throw "Gas refresh would increase a prepared price. Obtain a new withdrawal quote."
+  let operation : UserOperation := {
+    sender := 1, paymaster := some 1,
+    verificationGasLimit := candidate.verification, callGasLimit := candidate.execution,
+    preVerificationGas := candidate.preVerification,
+    paymasterVerificationGasLimit := candidate.paymasterVerification,
+    paymasterPostOpGasLimit := candidate.postOp, maxFeePerGas := candidate.maxFee,
+    maxPriorityFeePerGas := candidate.priority }
+  if !(Bundler.validate operation bounds).isOk then
+    throw "Refreshed gas bid exceeds its configured limits."
+  return candidate
+
+/-- Keeping all limits and lowering maxFee cannot increase the native ETH
+prefund quote; priority changes do not enter that maximum-cost calculation. -/
+theorem lowerGasBid_ethFee_nonincreasing (original : SponsoredWithdrawal.Gas)
+    (maximum priority : Nat) (h : maximum ≤ original.maxFee) :
+    SponsoredWithdrawal.ethFee { original with maxFee := maximum, priority } ≤
+      SponsoredWithdrawal.ethFee original := by
+  dsimp [SponsoredWithdrawal.ethFee]
+  exact Nat.div_le_div_right (Nat.mul_le_mul_right 120 (Nat.mul_le_mul_left _ h))
+
 /-- Custom bundlers use only the selected host's bounded EIP-1559 reference,
 with twice its base and tip allowance. No third-party gas oracle is consulted. -/
 def customPrice (read : JsonRpc.Method → Array Json → IO Json) : IO Json := do
@@ -208,15 +280,72 @@ def createWith (settings : Settings) (transport : Transport) : IO Client := do
       #[toJson (← checked <| Bundler.address owner), toJson ("latest" : String)])
     if nonce >= 2 ^ 64 - 1 then fail
     return nonce
+  let gasReference : IO (Nat × Nat) := do
+    let retries ← IO.mkRef (0 : Nat)
+    let gasRead (method : JsonRpc.Method) (params : Array Json) : IO Json := do
+      unless [JsonRpc.Method.feeHistory, .getBlockByNumber, .maxPriorityFee].contains method do
+        gasReferenceUnavailable
+      for _ in [0:3] do
+        let attempt ← try
+            pure (.ok (← reply settings.rpcUrl method params) : Except IO.Error JsonRpc.Reply)
+          catch error => pure (.error error)
+        match attempt with
+        | .ok (.success value) => return value
+        | .ok (.failure ..) => gasReferenceUnavailable
+        | .error error =>
+          if !transportUnavailable error then gasReferenceUnavailable
+          let used ← retries.get
+          if used >= 2 then gasReferenceUnavailable
+          retries.set (used + 1)
+          transport.sleepMs (if used == 0 then 500 else 1000)
+      gasReferenceUnavailable
+    try hostReference gasRead catch _ => gasReferenceUnavailable
   return {
     rpc := read
     checkChain := checkChain
     blockNumber := getBlock
     nonce := getNonce
     revalidateGasPrice := fun gas => do
-      let (base, tip) ← hostReference read
-      let _ ← checked <| PaymasterPrepare.checkPrice gas.maxFee gas.priority base tip
-      if gas.maxFee < base + gas.priority then fail
+      let (base, tip) ← gasReference
+      if !(PaymasterPrepare.checkPrice gas.maxFee gas.priority base tip).isOk then
+        throw <| IO.userError
+          ("Prepared gas quote exceeds current network price limits. Run the withdrawal again for a fresh quote." ++
+            gasPriceDetails gas base tip)
+      if gas.maxFee < base + gas.priority then
+        throw <| IO.userError
+          ("Prepared max fee no longer covers the current base fee and priority fee. Run the withdrawal again for a fresh quote." ++
+            gasPriceDetails gas base tip)
+    refreshGasBidDownward := fun original bounds => do
+      let quote ← if settings.customBundler then pure none else
+        try some <$> successful (← reply settings.bundlerUrl .pimlicoGasPrice #[])
+        catch _ => throw <| IO.userError "Could not refresh the bundler gas quote. Check --bundler-url or try again."
+      let (base, tip) ← gasReference
+      let (maximum, priority) ← match quote with
+        | none => pure (base * 2 + tip * 2, tip * 2)
+        | some value => try
+            if value.compress.utf8ByteSize > 4096 then fail
+            let standard ← field value "standard"
+            pure (← quantity (← field standard "maxFeePerGas"),
+              ← quantity (← field standard "maxPriorityFeePerGas"))
+          catch _ => throw <| IO.userError "The fresh bundler gas quote is malformed. Check --bundler-url or try another bundler."
+      if !(PaymasterPrepare.checkPrice maximum priority base tip bounds).isOk then
+        throw <| IO.userError "The fresh bundler gas quote exceeds current price limits. Try another bundler or obtain a new withdrawal quote."
+      if priority > original.priority then
+        throw <| IO.userError "The current recommended priority fee exceeds the prepared bid. Obtain a new withdrawal quote."
+      let tipCap := min 20000000000 (max 2000000000 (tip * 3))
+      let maximum := if base < 1000000 then
+          min (maximum + 1000000) (min (base * 3 + tipCap) bounds.maxFeePerGas)
+        else maximum
+      let candidate := { original with maxFee := min original.maxFee maximum, priority }
+      let candidate ← match acceptDownwardGas original candidate bounds with
+        | .ok gas => pure gas
+        | .error message => throw <| IO.userError message
+      if !(PaymasterPrepare.checkPrice candidate.maxFee candidate.priority base tip bounds).isOk ||
+          candidate.maxFee < base + candidate.priority then
+        throw <| IO.userError
+          ("A current gas bid cannot fit the prepared budget. Obtain a new withdrawal quote." ++
+            gasPriceDetails candidate base tip)
+      return candidate
     send := fun method params => do
       if method != .sendUserOperation || params.size != 2 then fail
       let entryPoint ← checked <| params[1]!.getStr?
@@ -237,17 +366,17 @@ def createWith (settings : Settings) (transport : Transport) : IO Client := do
     estimate := fun params => do
       if !(dummyEstimate params).isOk then return .rejected
       try
-        return classifyEstimate (← reply settings.bundlerUrl .estimateUserOperationGas params)
+        return classifyEstimate (← reply settings.bundlerUrl .estimateUserOperationGas params) params
       catch error =>
         if transportUnavailable error then return .unavailable .transport
         return .rejected
-    simulate := fun operation expected prior => do
+    simulate := fun operation expected prior bounds => do
       let hash ← match userOperationHash settings.chainId Bundler.entryPoint operation with
         | .ok hash => pure hash
         | .error _ => return false
       if (← attemptedSimulations.get).contains hash then return false
       attemptedSimulations.modify (·.push hash)
-      let params ← match EntryPointSimulation.requestParams operation with
+      let params ← match EntryPointSimulation.requestParams operation bounds with
         | .ok params => pure params
         | .error _ => return false
       let endpoint := settings.simulationRpcUrl.getD settings.rpcUrl
@@ -273,3 +402,5 @@ def Client.preparationEffects (client : Client) (randomField : IO Nat)
   randomField, prove, validateHistory }
 
 end Tornado.Cli.WithdrawalNetwork
+
+#print axioms Tornado.Cli.WithdrawalNetwork.lowerGasBid_ethFee_nonincreasing

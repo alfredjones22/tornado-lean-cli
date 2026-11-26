@@ -1,54 +1,60 @@
-# CLI parity and safety register
+# CLI coverage and safety register
 
-Target: clean `tornado-cli-new-era` main commit `a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326`, `@kohaku-eth/tornado-cash@0.1.0-alpha.40`, and pinned TypeScript build SHA-256 `cb039416616458ab261036e08e3c4d83991a1b6d7ab4259328894292c035f809`. The unchanged externalized bundle is supplemented by lockfile and eight installed oracle package tree hashes in `fixtures/typescript-oracle-identity.json`. This register describes implementation coverage. It is not a correctness certificate.
+This register describes the standalone Lean CLI's supported commands, operating limits, tests and proved properties. It is not a correctness certificate. Independent regression references supplement the native specifications; matching a reference implementation is not the CLI's correctness specification.
 
-## Seventeen TypeScript leaf commands
+## Supported commands
 
-- `pools` and `deposit plan`: native catalog, amount parsing, and planning. The 156-case CLI suite compares these commands and root version flags with the pinned TypeScript build.
+- `pools` and `deposit plan`: native catalog, amount parsing, and planning. A 156-case regression suite checks catalog/planner outputs and root version flags against pinned independent references.
 - `notes create` and `notes create-plan`: native entropy, independent or seeded note derivation, and exclusive protected backup creation. Compatibility and recovery tests are finite; the secret-handling code is not production certified.
-- `notes inspect` and `notes invoice`: native protected backup read and public commitment/invoice derivation. Six pinned note-file parity and rejection cases pass.
-- `deposit send`: native dry-run and explicit `--experimental-send --journal <new-path>`. A protected 1–100-note backup selects sequential EIP-1559 or Simple7702 batching; `--sequential` forces ordinary transactions. Protected native signing, shared sender locks and commitment claims, exact approvals, journal-before-exposure, post-review rechecks, exact receipts/events and twelve confirmations are connected. Simple7702 also records its signed persistent delegation before estimation. Offline fault tests and viem vectors pass; funded testing and end-to-end proofs remain open.
-- `deposit pay-invoice`: native `--dry-run` and `--experimental-send --journal <new-path>`. The live path signs sequential EIP-1559 transactions through a protected native libsecp256k1 boundary, creates a local per-invoice claim and per-sender lock, records each signed transaction hash in a protected journal before broadcast, asks the user to type `SEND` for each transaction, enforces a conservative gas-cost ceiling, stops on ambiguous outcomes, and checks exact successful Deposit events plus 12 confirmations. It has injected fault and pinned signature tests but no funded live test or end-to-end proof. It does not accept `--yes`.
+- `notes inspect` and `notes invoice`: native protected backup read and public commitment/invoice derivation. Six pinned note-file reference and rejection cases pass.
+- `deposit send`: native dry-run and explicit `--broadcast --journal <new-path>`. A protected 1–100-note backup selects sequential EIP-1559 or Simple7702 batching; `--sequential` forces ordinary transactions. Protected native signing, shared sender locks and commitment claims, exact approvals, journal-before-exposure, post-review rechecks, and route-specific exact RPC transaction, receipt, block and Deposit-event checks are connected. Deposit sends continue after one validated inclusion without a further block-depth wait. A reorg can still reverse the deposit; inclusion is not finality. Simple7702 also records its signed persistent delegation before estimation. Offline fault tests and viem vectors pass; separate [Sepolia ETH execution results](SEPOLIA_LIVE_TESTS.md) cover small plans, while end-to-end correctness remains unproved.
+- `deposit pay-invoice`: native `--dry-run` and `--broadcast --journal <new-path>`. The live path signs sequential EIP-1559 transactions through a protected native libsecp256k1 boundary, creates a local per-invoice claim and per-sender lock, records each signed transaction hash in a protected journal before broadcast, asks the user to type `SEND` for each transaction unless explicitly authorized by `--non-interactive`, enforces a conservative gas-cost ceiling, stops on ambiguous outcomes, and checks the exact RPC transaction, receipt, block and successful Deposit event for one validated inclusion. There is no further block-depth wait, and a later reorg can still reverse the deposit. It has injected fault and pinned signature tests and one [Sepolia ETH invoice execution](SEPOLIA_LIVE_TESTS.md); end-to-end correctness remains unproved. It does not accept `--yes`.
 - `deposit status`: native sequential and Simple7702 batch journal reconciliation. Exact receipt, EntryPoint and Deposit events gate confirmation; a protected byte-for-byte compare-and-replace updates the journal. A separate `deposit inspect-status` command reads sequential journals without updating them.
-- `withdraw one`: native local `--dry-run`, history `--preflight`, and explicit `--experimental-send --route 4337|relayer`. The parent obtains public metadata/history and a bound proof from the separate Lean worker; direct 4337 note-derived signing also stays in that worker. Both live routes require typed `WITHDRAW` and reject `--yes` or replacement retries. Before executable exposure, they reserve the same protected opaque per-note status path, so changing route within the same status directory cannot bypass an attempt. The spent query discloses the nullifier hash to the selected RPC. One-note 4337 journals before its single bundler send and does not run the batch execution simulation; Classic relayer makes exactly one proof POST and preserves an unknown result without retry.
-- `withdraw batch`: native dry-run and explicit experimental 4337 submission for 2–12 same-asset notes, or 1–12 with contract calls. It checks a locally predicted pinned smart account, optional receiver, protected owner key, shared sender lock, ordered raw/Safe calls and all selected notes. Native `contractMethod` re-encoding supports bounded Solidity primitives, tuples and arrays, with 28 viem encoding/hash cases and 20 rejection cases. Sponsored proof/quote construction, typed `WITHDRAW`, protected per-note reservations, signed simulation and one-send execution are connected. Unknown or partially persisted outcomes retain candidate evidence and block replacement.
+- `withdraw one`: native local `--dry-run`, history `--preflight`, and explicit `--broadcast --route 4337|relayer`. The parent obtains public metadata/history and a bound proof from the separate Lean worker; direct 4337 note-derived signing also stays in that worker. Both live routes require typed `WITHDRAW` or explicit `--non-interactive` authorization and reject `--yes` or replacement retries. Before executable exposure, they reserve the same protected opaque per-note status path, so changing route within the same status directory cannot bypass an attempt. The spent query discloses the nullifier hash to the selected RPC. One-note 4337 journals before its single bundler send and does not run the batch execution simulation; Classic relayer makes exactly one proof POST and preserves an unknown result without retry.
+- `withdraw batch`: native dry-run and explicit experimental 4337 submission for 2–12 same-asset notes, or 1–12 with contract calls. It checks a locally predicted pinned smart account, optional receiver, protected owner key, shared sender lock, ordered raw/Safe calls and all selected notes. Native `contractMethod` re-encoding supports bounded Solidity primitives, tuples and arrays, with 28 viem encoding/hash cases and 20 rejection cases. Sponsored proof/quote construction, typed `WITHDRAW` or explicit `--non-interactive` authorization, protected per-note reservations, signed simulation and one-send execution are connected. Unknown or partially persisted outcomes retain candidate evidence and block replacement.
 - `withdraw status`: native one-note 4337, Classic relayer, and batch-4337 journal reconciliation. One-note status checks exact EntryPoint and pool events and updates its protected journal. Relayer status confirms only from exact chain receipt/pool events; relayer job-only claims remain unknown. Batch status validates all mirrors before updating, retains every candidate/reservation and uses an authoritative in-progress marker plus protected mirror CAS. Partial writes remain recoverable and report exit 2 instead of claiming completion.
 - `smart-account show`: native pinned-account identity and balances at one RPC block, tested with offline fixtures.
 - `smart-account status`: native protected recovery-journal reconciliation, exact transaction/receipt checks and protected compare-and-replace updates.
-- `smart-account recover`: native dry-run accepts a public owner or protected owner-key-file. Live recovery requires `--experimental-send --owner-key-file <path> --journal <new-path>` and typed `RECOVER`; it does not accept `--yes`. It checks the locally predicted pinned account and supported balances, rechecks the exact review after approval, enforces bounded gas/fees, signs through the protected native key boundary, and journals the exact zero-value type-2 transaction before broadcast. It shares the owner sender lock with deposit/batch-withdrawal routes, retains it after uncertain signing/send outcomes, and releases it only after exact transaction/receipt evidence and twelve observed confirmations.
+- `smart-account recover`: native dry-run accepts a public owner, protected owner-key-file, or hidden terminal key entry. Live recovery requires `--broadcast --journal <new-path>` and typed `RECOVER` or explicit `--non-interactive` authorization; `--owner-key-file <path>` is required in non-interactive live mode and optional otherwise. It does not accept `--yes`. It checks the locally predicted pinned account and supported balances, rechecks the exact review after approval, enforces bounded gas/fees, signs through the protected native key boundary, and journals the exact zero-value type-2 transaction before broadcast. It shares the owner sender lock with deposit/batch-withdrawal routes in the same reservation directory, retains it after uncertain signing/send outcomes, and releases it only after exact transaction/receipt evidence and one validated inclusion.
 - `history` and `compliance report`: native bounded Saga/RPC history, pinned `--assets-dir` imports, optional protected chunk caches, checkpoint/root/count checks and reorg handling, exact-block pool logs and receipts, and redacted protected reports. Withdrawal preflight accepts the same assets/cache options. Ethereum consensus/finality remains an assumption.
 
-All 17 command names have a native route, including experimental deposit, withdrawal and recovery sends. This is not full CLI/dependency parity or a correctness certificate. Option/resource bounds, incomplete secret hardening, external state assumptions and unproved effectful behavior remain. Verification uses public unfunded fixtures and injected submission effects. Live routes require `--experimental-send`; that flag does not establish production safety.
+The listed commands have native routes, including experimental deposit, withdrawal and recovery sends. This is not a whole-program correctness certificate. Option/resource bounds, incomplete secret hardening, external state assumptions and unproved effectful behavior remain. The reproducible verification gate uses public unfunded fixtures and injected submission effects. Separate [live Sepolia results](SEPOLIA_LIVE_TESTS.md) cover 12 scenarios and 18 ETH notes, including sponsored withdrawals, one WETH call sequence and recovery; they do not cover Classic relayer submission, ERC-20 Tornado pools or maximum-size batches. Live routes require `--broadcast`; that flag does not establish production safety.
 
-## Known compatibility differences
+## Operating limits
 
-All primary deposit, withdrawal and recovery flows are connected experimentally,
-but these concrete behavior differences remain in addition to proof gaps:
+Deposit, withdrawal and recovery flows have these operating limits in addition
+to the proof gaps described below:
 
-- Live sends require typed review (`SEND`, `WITHDRAW` or `RECOVER`) and do not
-  support unattended `--yes`. Live withdrawal routes also reject the legacy
-  `--retry-rejected` replacement option; existing attempts must be reconciled.
-- Native `--assets-dir` selects history assets only. Proving uses the bundled
-  `assets/proving` and witness assets under `--proving-assets-root`. This differs
-  from the TypeScript unified artifact directory and automatic remote artifact
-  fallback; the native command does not reproduce that artifact-loading workflow.
+- Live sends default to typed review (`SEND`, `WITHDRAW` or `RECOVER`), with
+  `DELEGATE` for new or replaced deposit authorization. Explicit
+  `--non-interactive` skips these confirmations while still printing reviews
+  and retaining validation, fee bounds, revalidation, journals, reservations
+  and uncertain-outcome handling. Run `--dry-run` first. Unattended deposits
+  require a protected `--key-file`; batch withdrawals and live recovery
+  require a protected `--owner-key-file`. One-note withdrawals use the
+  protected note backup without an account key. The flag alone does not enable
+  broadcasting, and `--yes` remains unavailable. Live withdrawal routes also
+  reject the legacy `--retry-rejected` replacement option; existing attempts
+  must be reconciled.
+- `--assets-dir` selects history assets only. Proving uses the bundled
+  `assets/proving` and witness assets under `--proving-assets-root`; it does not
+  automatically download missing proving assets.
 - Relayer discovery history is scanned through bounded RPC requests rather
   than imported from the pinned relayer-history chunks. Supported ranges and
-  provider limits can therefore affect availability differently.
+  provider limits can affect availability.
 - Native relayer withdrawal status uses chain evidence and preserves the saved
   job ID. It does not fetch `v1/jobs` progress, relayer-reported `FAILED` state,
-  or transaction-hash hints. A pending/failed job visible in the TypeScript
-  interface may remain unknown here until matching chain evidence is found.
+  or transaction-hash hints. A pending/failed relayer job may remain unknown
+  until matching chain evidence is found.
 - Relayer ENS names and origins use a conservative ASCII/DNS subset. Unicode
-  names, explicit ports and IP-literal origins are rejected; the TypeScript
-  parsers accept a wider input domain.
+  names, explicit ports and IP-literal origins are rejected.
 
 These limits affect interactivity, accepted inputs, loading and status behavior.
 They are not resolved merely by adding more proofs over the current code.
 
 ## What the current checks establish
 
-`node scripts/verify.mjs` rebuilds the native modules, rejects undeclared axioms and proof escapes, checks the exact C extern allowlist, runs finite crypto/protocol vectors and OS-boundary fault tests, and compares the supported catalog/planner/note-file surface with the pinned TypeScript CLI. The full gate must be rerun after every implementation change; an older `reports/verify.json` is not evidence for current source.
+`node scripts/verify.mjs` rebuilds the native modules, rejects undeclared axioms and proof escapes, checks the exact C extern allowlist, runs finite crypto/protocol vectors and OS-boundary fault tests, and checks catalog/planner/note-file outputs against pinned independent references. The full gate must be rerun after every implementation change; an older `reports/verify.json` is not evidence for current source.
 
 Lean theorems constrain selected native definitions: catalog facts, ABI/transaction encodings, event matching, fee arithmetic, planner conservation, policy transitions, and abstract effect ordering. The sponsored runner now uses the proved `WithdrawalDriver` command machine, binding full canonical authorized bytes and callback ordering. The real worker uses a restricted effect language with a proved typed release envelope. The sampler's shared loop has finite distribution/independence/exhaustion proofs under IID uniform decoded candidates. Read-only differential coverage is 156 catalog/planner/version cases plus six note-file cases. Other send engines retain focused offline compatibility and injected fault tests. No theorem establishes physical C/HTTPS effects or whole-program correctness. See the [withdrawal security specification](WITHDRAWAL_SECURITY_SPEC.md).
 
@@ -94,7 +100,7 @@ original candidate, inspect `smart-account show`, and use reviewed recovery
 instead of replacing a failed UserOperation blindly. Success requires all
 expected events; standalone status is observed inclusion, not finality.
 
-Classic relayer discovery, registration/stake/status/fee checks, verified proof binding and one-POST execution are connected. Revalidation follows typed approval, and an exclusive permanent per-note claim precedes POST. Lost responses, missing job IDs, partial journal writes and ambiguous status never trigger a second POST. A job response alone cannot establish confirmation; matching pool receipt/event evidence is required. Relayer status currently reports observed inclusion without a twelve-block wait; sponsored and recovery sends use twelve observed confirmations before owner-lock release. Neither is authenticated finality.
+Classic relayer discovery, registration/stake/status/fee checks, verified proof binding and one-POST execution are connected. Revalidation follows typed approval, and an exclusive permanent per-note claim precedes POST. Lost responses, missing job IDs, partial journal writes and ambiguous status never trigger a second POST. A job response alone cannot establish confirmation; matching pool receipt/event evidence is required. Relayer status checks observed inclusion; sponsored and recovery sends recheck one observed inclusion before owner-lock release. Neither is authenticated finality.
 
 The HTTPS RPC, Saga proxy, bundler, relayer, C/POSIX and libsecp256k1 boundaries, disk hardware, worker installation, Ethereum finality, deployed pool/verifier code, and cryptographic hardness are external assumptions. Malformed or inconsistent API data fails closed within explicit bounds; an internally consistent malicious RPC can still lie. Chain IDs, block hashes, receipts and event checks do not establish truth without consensus-state authentication.
 
@@ -111,8 +117,10 @@ reservation before executable exposure, no duplicate/replacement under
 uncertainty, and success only from exact transaction/event evidence. Selected
 policy and replay theorems establish parts of these properties; complete
 runnable command refinement remains unproved. Constant-time/zeroizing note
-handling, authenticated worker and deployed-code binding, exhaustive provider
-fault coverage and funded testnet validation are outside current coverage.
+handling, authenticated worker and deployed-code binding, and exhaustive
+provider fault coverage remain outside the established proofs. Separate finite
+[Sepolia ETH execution results](SEPOLIA_LIVE_TESTS.md) do not establish general
+fund safety or untested network/asset/route coverage.
 The variable-time, nonzeroizing worker has no production security guarantee.
 [Build provenance](BUILD_PROVENANCE.md) can bind recorded artifact bytes to a
 fresh full report and support an independent integrity check. The manifest

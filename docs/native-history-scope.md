@@ -1,17 +1,14 @@
 # Native Lean Saga history boundary
 
-Pinned source: `tornado-cli-new-era` main commit
-`daaa0c18de91ecc2effbdaea8d0bea7c856ff7f7`, especially
-`src/services/saga-history.ts`, `src/services/history.ts`, and
-`src/runtime/protocol.ts`. This is a bounded pure component used by the native
-history orchestrator and withdrawal sessions; it is not a standalone provider
-or Ethereum consensus authenticator.
+This bounded pure component validates Saga indexes, event chunks and RPC
+history ranges for the native history orchestrator and withdrawal sessions.
+It is not a standalone provider or Ethereum consensus authenticator.
 
 ## What the component checks
 
 - `planIndex(selection, indexBytes)` parses an index of at most 2 MiB, selects
   exactly one `tornado-cash` stream for the requested chain and pool, computes
-  the alpha.38 legacy rewind, and rejects segment gaps, overlaps, unsafe
+  the legacy rewind, and rejects segment gaps, overlaps, unsafe
   filenames, unsupported metadata, and a cursor beyond the captured head.
   A fresh snapshot cursor one block before registration is accepted and the
   replay start is clamped to registration.
@@ -41,20 +38,19 @@ or Ethereum consensus authenticator.
   ABI. Empty results are accepted as provider claims; they do not establish
   that the provider returned every event.
 
-## Bounds and compatibility
+## Resource bounds
 
-The pinned TypeScript client permits 64 MiB compressed and 256 MiB decompressed
-Saga chunks. The current native Lean gzip decoder has a 32 MiB hard limit for
-both input and output. This component **fails closed** above 32 MiB. It also limits a chunk
+The native Lean gzip decoder has a 32 MiB hard limit for both input and output.
+This component **fails closed** above 32 MiB. It also limits a chunk
 to one million event records. The selected range is capped at 64 chunks,
 256 MiB of aggregate supplied chunk bytes, and one million selected events.
 The API accepts an in-memory array of all chunks, so live callers enforce
 those budgets during fetching. There is no streaming validator; a late
 validation error can follow substantial allocation and computation. HTTP
 `Content-Encoding` may already decompress a
-`.gz` payload, so it accepts either bounded gzip or bounded raw bytes, matching
-the TypeScript behavior. It applies stricter canonical quantity syntax than
-the pinned TypeScript parser, which can reject some otherwise usable streams.
+`.gz` payload, so the validator accepts either bounded gzip or bounded raw
+bytes. It requires canonical quantity syntax and can reject noncanonical
+streams even when their intended numeric values are usable.
 
 ## Integration API and obligations
 
@@ -68,9 +64,8 @@ the pinned TypeScript parser, which can reject some otherwise usable streams.
    it does not authenticate Saga data. Use the
    `https://saga.0000000000.org` base for mainnet and its `/sepolia` path for
    Sepolia, unless the CLI configuration explicitly chooses another source.
-   The `0000000000.org` proxy is required for browser CORS in the UI; the CLI
-   may technically use direct HTTPS, but parity with the pinned CLI default
-   uses this proxy.
+   The native CLI defaults to this proxy; its HTTPS transport does not
+   depend on browser CORS.
 3. Call `planIndex`, fetch exactly `plan.segments` in that order with per-chunk
    size/time limits and an aggregate fetch deadline, and fetch the mutable
    `hotHead` with no cache, then

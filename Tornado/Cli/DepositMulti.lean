@@ -1,5 +1,7 @@
 import Tornado.Cli.DepositSend
 import Tornado.Runtime.NativeSigner
+import Tornado.Domain.Simple7702
+import Tornado.Runtime.Bundler
 
 /-!
 Read-only multi-note deposit planning for the pinned CLI's sequential and
@@ -38,6 +40,7 @@ inductive Mode where
 
 inductive Reason where
   | forcedSequential | contractOrDelegated | singleDeposit | undelegatedEOA
+  | forcedDelegated | compatibleDelegation
   deriving Repr, BEq, Inhabited
 
 structure Plan where
@@ -81,7 +84,7 @@ def splitItems (items : Array Item) (limit : Nat) : Except String (Array (Array 
     index := index + take
   return chunks
 
-private def validateItems (items : Array Item) (chain : ChainId) :
+def validateItems (items : Array Item) (chain : ChainId) :
     Except String Unit := do
   if items.isEmpty || items.size > 100 then
     throw "Use 1–100 supported notes in one deposit session."
@@ -115,7 +118,7 @@ private def poolReading (readings : Readings) (pool : Pool) : Except String Pool
     throw "On-chain pool denomination differs from the pinned catalog."
   return row
 
-private def depositStep (item : Item) : Except String DepositSend.Step := do
+def depositStep (item : Item) : Except String DepositSend.Step := do
   let to ← addressNat item.pool.address
   let data ← Abi.poolDeposit item.commitment
   return ⟨.deposit,
@@ -149,7 +152,12 @@ private def stepsFor (items : Array Item) (readings : Readings) :
     reading snapshot. Later batch approvals are intentionally left to fresh
     re-planning; this pure function does not sign subsequent batches. -/
 private def planCandidate (items : Array Item) (chain : ChainId) (sender : Nat)
-    (readings : Readings) (forceSequential : Bool := false) : Except String Plan := do
+    (readings : Readings) (forceSequential : Bool := false)
+    (forceDelegated : Bool := false) (entryPointGasCredit : Nat := 0) : Except String Plan := do
+  if forceSequential && forceDelegated then
+    throw "Sequential and delegated deposit routes cannot both be forced."
+  if forceDelegated && !Simple7702.mayForceDelegated readings.senderCode then
+    throw "Forced delegation requires an EOA or an EIP-7702 delegation designator."
   validateItems items chain
   if sender == 0 || sender >= 2 ^ 160 ||
       readings.chainId != chainNumber chain then
@@ -157,32 +165,44 @@ private def planCandidate (items : Array Item) (chain : ChainId) (sender : Nat)
   let total := items.foldl (fun sum item => sum + item.pool.amount) 0
   for pool in uniquePools items do
     let _ ← poolReading readings pool
+  if entryPointGasCredit >= Abi.maxUint256 then
+    throw "EntryPoint gas credit is outside uint256."
+  let usesGasCredit := !forceSequential &&
+    (forceDelegated || (items.size > 1 &&
+      (readings.senderCode.isEmpty || Simple7702.isCompatible readings.senderCode))) &&
+    entryPointGasCredit > 0
   if items[0]!.pool.asset.token.isSome then
-    if readings.tokenBalance < total || readings.ethBalance == 0 then
+    if readings.tokenBalance < total || (readings.ethBalance == 0 && !usesGasCredit) then
       throw "Sender lacks the selected tokens or ETH gas balance."
-  else if readings.ethBalance <= total then
+  else if readings.ethBalance < total || (readings.ethBalance == total && !usesGasCredit) then
     throw "Sender needs the selected ETH plus gas."
   if forceSequential then
     return ⟨.sequential, .forcedSequential, items.size, total,
       #[(← stepsFor items readings)]⟩
-  if !readings.senderCode.isEmpty then
+  if !forceDelegated && items.size == 1 then
+    return ⟨.sequential, .singleDeposit, 1, total,
+      #[(← stepsFor items readings)]⟩
+  let compatible := Simple7702.isCompatible readings.senderCode
+  if !forceDelegated && !compatible && !readings.senderCode.isEmpty then
     return ⟨.sequential, .contractOrDelegated, items.size, total,
       #[(← stepsFor items readings)]⟩
   let chunks ← splitItems items (depositBatchLimit items[0]!.pool.asset)
   let first ← stepsFor chunks[0]! readings
-  if items.size == 1 && first.size == 1 then
-    return ⟨.sequential, .singleDeposit, 1, total, #[first]⟩
   let mut batches := #[first]
   for i in [1:chunks.size] do
     let mut calls := #[]
     for item in chunks[i]! do calls := calls.push (← depositStep item)
     batches := batches.push calls
-  return ⟨.simple7702, .undelegatedEOA, items.size, total, batches⟩
+  let reason := if forceDelegated then Reason.forcedDelegated
+    else if compatible then .compatibleDelegation else .undelegatedEOA
+  return ⟨.simple7702, reason, items.size, total, batches⟩
 
 /-- Public semantic input retains the exact selected commitment order and
 catalog amounts, separately from the candidate calldata. -/
 def planIntent (items : Array Item) (chain : ChainId) (sender : Nat)
-    (readings : Readings) (forceSequential : Bool) : Except String DepositIntent.Input := do
+    (readings : Readings) (forceSequential : Bool) (forceDelegated : Bool := false)
+    (entryPointGasCredit : Nat := 0) :
+    Except String DepositIntent.Input := do
   let selected ← items.mapM fun item => do
     let pool ← addressNat item.pool.address
     let token : Option Nat ← match item.pool.asset.token with
@@ -193,34 +213,38 @@ def planIntent (items : Array Item) (chain : ChainId) (sender : Nat)
       commitment := item.commitment.data } : DepositIntent.Item)
   return {
     items := selected, sender, chainId := chainNumber chain, actualChainId := readings.chainId,
-    senderHasCode := !readings.senderCode.isEmpty, ethBalance := readings.ethBalance,
+    senderCode := readings.senderCode.data, ethBalance := readings.ethBalance,
     tokenBalance := readings.tokenBalance,
     pools := readings.pools.map (fun row => ⟨row.address, row.denomination, row.allowance⟩),
-    forceSequential, limit := depositBatchLimit items[0]!.pool.asset }
+    forceSequential, forceDelegated, limit := depositBatchLimit items[0]!.pool.asset,
+    entryPointGasCredit }
 
 def planEncoding (plan : Plan) : DepositIntent.EncodedPlan := {
   mode := match plan.mode with | .sequential => .sequential | .simple7702 => .simple7702
   reason := match plan.reason with
     | .forcedSequential => .forcedSequential | .contractOrDelegated => .contractOrDelegated
     | .singleDeposit => .singleDeposit | .undelegatedEOA => .undelegatedEOA
+    | .forcedDelegated => .forcedDelegated | .compatibleDelegation => .compatibleDelegation
   noteCount := plan.noteCount, amount := plan.amount,
   batches := plan.batches.map (fun steps => steps.map DepositSend.stepEncoding) }
 
 structure PreparedPlan (items : Array Item) (chain : ChainId) (sender : Nat)
-    (readings : Readings) (forceSequential : Bool) where
+    (readings : Readings) (forceSequential : Bool) (forceDelegated : Bool := false)
+    (entryPointGasCredit : Nat := 0) where
   private mk ::
   output : Plan
   input : DepositIntent.Input
-  original : planIntent items chain sender readings forceSequential = .ok input
+  original : planIntent items chain sender readings forceSequential forceDelegated entryPointGasCredit = .ok input
   checked : DepositIntent.Checked input (planEncoding output)
 
 def preparePlan (items : Array Item) (chain : ChainId) (sender : Nat)
-    (readings : Readings) (forceSequential : Bool := false) :
-    Except String (PreparedPlan items chain sender readings forceSequential) :=
-  match planCandidate items chain sender readings forceSequential with
+    (readings : Readings) (forceSequential : Bool := false) (forceDelegated : Bool := false)
+    (entryPointGasCredit : Nat := 0) :
+    Except String (PreparedPlan items chain sender readings forceSequential forceDelegated entryPointGasCredit) :=
+  match planCandidate items chain sender readings forceSequential forceDelegated entryPointGasCredit with
   | .error error => .error error
   | .ok output =>
-    match original : planIntent items chain sender readings forceSequential with
+    match original : planIntent items chain sender readings forceSequential forceDelegated entryPointGasCredit with
     | .error error => .error error
     | .ok input =>
       match DepositIntent.accept input (planEncoding output) with
@@ -230,23 +254,38 @@ def preparePlan (items : Array Item) (chain : ChainId) (sender : Nat)
 /-- Certificates bind every actual planner result to original public items
 and this exact snapshot, including fresh forced replanning of later chunks. -/
 def plan (items : Array Item) (chain : ChainId) (sender : Nat)
-    (readings : Readings) (forceSequential : Bool := false) : Except String Plan :=
-  (preparePlan items chain sender readings forceSequential).map (·.output)
+    (readings : Readings) (forceSequential : Bool := false) (forceDelegated : Bool := false)
+    (entryPointGasCredit : Nat := 0) : Except String Plan :=
+  (preparePlan items chain sender readings forceSequential forceDelegated entryPointGasCredit).map (·.output)
 
 theorem plan_success_decodes (items : Array Item) (chain : ChainId) (sender : Nat)
     (readings : Readings) (forceSequential : Bool) (output : Plan)
-    (built : plan items chain sender readings forceSequential = .ok output) :
-    ∃ input meaning, planIntent items chain sender readings forceSequential = .ok input ∧
+    {forceDelegated : Bool} {entryPointGasCredit : Nat}
+    (built : plan items chain sender readings forceSequential forceDelegated entryPointGasCredit = .ok output) :
+    ∃ input meaning, planIntent items chain sender readings forceSequential forceDelegated entryPointGasCredit = .ok input ∧
       DepositIntent.expected input = .ok meaning ∧
       DepositIntent.decodePlan (planEncoding output) = .ok meaning ∧
       DepositIntent.PlanPolicy input meaning := by
-  cases prepared : preparePlan items chain sender readings forceSequential with
+  cases prepared : preparePlan items chain sender readings forceSequential forceDelegated entryPointGasCredit with
   | error error => simp [plan, prepared, Except.map] at built
   | ok result =>
     have same : result.output = output := by simpa [plan, prepared, Except.map] using built
     subst output
     exact ⟨result.input, result.checked.meaning, result.original,
       result.checked.original, result.checked.decoded, result.checked.policy⟩
+
+theorem plan_success_routing (items : Array Item) (chain : ChainId) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool) (output : Plan)
+    {forceDelegated : Bool} {entryPointGasCredit : Nat}
+    (built : plan items chain sender readings forceSequential forceDelegated entryPointGasCredit = .ok output) :
+    ∃ input meaning, planIntent items chain sender readings forceSequential forceDelegated entryPointGasCredit = .ok input ∧
+      DepositIntent.expected input = .ok meaning ∧
+      DepositIntent.decodePlan (planEncoding output) = .ok meaning ∧
+      DepositIntent.RoutingPolicy input meaning := by
+  obtain ⟨input, meaning, original, expected, decoded, policy⟩ :=
+    plan_success_decodes items chain sender readings forceSequential output
+      (forceDelegated := forceDelegated) (entryPointGasCredit := entryPointGasCredit) built
+  exact ⟨input, meaning, original, expected, decoded, policy.2.2.2.2.2.1⟩
 
 /-- Parse a protected backup to public commitments. The returned list has no
     preimages; callers must not retain or print the original backup text. -/
@@ -278,6 +317,21 @@ private def callWord (rpc : String) (id target : Nat) (data : ByteArray) : IO Na
     #[Json.mkObj [("to", toJson to), ("data", toJson (hex data))],
       toJson ("latest" : String)]
   rpcWord result
+
+/-- Read the sender's own gas credit only for an eligible Simple7702 route.
+This remains a separate real input: EntryPoint credit cannot fund deposit
+principal or gas for an ordinary sequential transaction. -/
+def gasCreditForPlan (rpc : String) (items : Array Item) (sender : Nat)
+    (readings : Readings) (forceSequential : Bool := false)
+    (forceDelegated : Bool := false) : IO Nat := do
+  if forceSequential || (!forceDelegated && (items.size == 1 ||
+      (!readings.senderCode.isEmpty && !Simple7702.isCompatible readings.senderCode))) then
+    return 0
+  try
+    callWord rpc 1000 Bundler.entryPoint (Abi.selector "balanceOf(address)" ++
+      (← fromExcept <| Abi.addressWord sender))
+  catch _ =>
+    throw <| IO.userError "Could not read the sender's EntryPoint gas credit. Check the RPC endpoint."
 
 /-- Read route eligibility, aggregate balances and exact denominational and
     allowance values from one selected RPC. This never requests a signature. -/
@@ -331,19 +385,25 @@ private def stepText (step : DepositSend.Step) : Except String String := do
 /-- Runnable dry-run for a protected note backup. Only public commitments and
     exact call data appear in the output. It does not sign, journal, or send. -/
 def dryRun (notesFile keyFile rpc : String) (chain : ChainId)
-    (forceSequential : Bool := false) : IO String := do
+    (forceSequential : Bool := false) (forceDelegated : Bool := false) : IO String := do
   let sender ← NativeSigner.addressFromProtectedFile (← absolutePrivatePath keyFile)
   let bytes ← ProtectedIO.readPrivate (← absolutePrivatePath notesFile)
   let some raw := String.fromUTF8? bytes
     | throw <| IO.userError "Private note backup is not UTF-8."
   let items ← fromExcept <| publicItems raw chain
   let readings ← liveReadings rpc items chain sender
-  let preview ← fromExcept <| plan items chain sender readings forceSequential
+  let gasCredit ← gasCreditForPlan rpc items sender readings forceSequential forceDelegated
+  let preview ← fromExcept <| plan items chain sender readings forceSequential forceDelegated gasCredit
   let mut lines := [s!"Sender: {← fromExcept <| addressText sender}",
     s!"Total: {preview.amount} base units of {items[0]!.pool.asset.symbol} across {preview.noteCount} deposit(s)."]
   if preview.mode == .simple7702 then
-    lines := lines ++ [s!"Route: {preview.batches.size} Simple7702 batch(es) from an undelegated EOA.",
-      "The first batch would authorize Simple7702 on this EOA; delegation would persist."]
+    lines := lines ++ [s!"Route: {preview.batches.size} Simple7702 UserOperation batch(es)."]
+    if Simple7702.isCompatible readings.senderCode then
+      lines := lines ++ ["The existing Simple7702 delegation would be reused; no new authorization is needed."]
+    else if readings.senderCode.isEmpty then
+      lines := lines ++ ["The first batch would authorize Simple7702 on this EOA; delegation would persist."]
+    else
+      lines := lines ++ ["The first batch would replace the existing delegation with Simple7702; delegation would persist."]
   else
     lines := lines ++ ["Route: sequential EIP-1559 transactions."]
   for i in [0:preview.batches.size] do
@@ -359,3 +419,4 @@ def dryRun (notesFile keyFile rpc : String) (chain : ChainId)
 end Tornado.Cli.DepositMulti
 
 #print axioms Tornado.Cli.DepositMulti.plan_success_decodes
+#print axioms Tornado.Cli.DepositMulti.plan_success_routing

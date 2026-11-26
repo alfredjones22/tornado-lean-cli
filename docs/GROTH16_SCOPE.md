@@ -3,9 +3,10 @@
 The native CLI implements the complete pinned Withdraw(20) proving route:
 31-byte nullifier and 31-byte secret, a 20-level MiMC path, six public signals,
 complete witness generation, sparse-key H calculation, BN254 point assembly,
-256-byte Solidity serialization, and compiled-key verification. The reference
-is `tornado-cli-new-era` at `a24d5f5e89d1f2486a031b1e5e8b1a92e81e1326`,
-`@kohaku-eth/tornado-cash@0.1.0-alpha.40` and `micro-zk-proofs@0.3.1`.
+256-byte Solidity serialization, and compiled-key verification. Independent
+fixtures use pinned `@kohaku-eth/tornado-cash@0.1.0-alpha.40` and
+`micro-zk-proofs@0.3.1` reference implementations; source identities and hashes
+remain recorded in the fixtures and their generators.
 The runnable arithmetic is native Lean, variable time and nonzeroizing.
 
 ## What the kernel proofs establish

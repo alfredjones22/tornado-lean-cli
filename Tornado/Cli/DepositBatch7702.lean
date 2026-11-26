@@ -2,6 +2,7 @@ import Tornado.Runtime.WithdrawalJournalProgram
 import Tornado.Cli.DepositMultiSend
 import Tornado.Runtime.Bundler
 import Tornado.Protocol.DepositCallsIntent
+import Tornado.Domain.Simple7702
 
 /-! Simple7702 batched deposits with protected owner signing. Signed
 delegation can be executable before an operation is submitted, so the journal
@@ -13,8 +14,14 @@ namespace Tornado.Cli.DepositBatch7702
 open Lean Tornado.Domain Tornado.Crypto Tornado.Protocol Tornado.Runtime
 open Tornado.Protocol.UserOperation08 Tornado.Cli.DepositMulti
 
-def implementation : Nat := 0xe6cae83bde06e4c305530e199d7217f42808555b
-def implementationHash : String := "0xcc7b633aef4b2543cb8f37522adf1a401f910f0f6b2430c1eecc11f401ccfcf3"
+def implementation : Nat := Simple7702.implementation
+def implementationHash : String := Simple7702.implementationHash
+
+/-- Deposits have a larger execution budget than withdrawal operations. The
+    whole operation also stays below sixteen million gas, leaving headroom
+    below the EIP-7825 outer transaction cap. Fee-cost bounds remain enforced. -/
+def defaultBounds : Bundler.Bounds := { maxCallGas := 15000000 }
+def maxOperationGas : Nat := 16000000
 
 private def checked (value : Except String α) : IO α :=
   match value with
@@ -34,9 +41,7 @@ private def addr (raw : String) : Except String Nat := do
   if bytes.size != 20 then throw "Invalid deposit address."
   return natOf bytes
 
-def designator : ByteArray :=
-  ByteArray.mk #[0xef, 0x01, 0x00] ++
-    ((Abi.addressWord implementation).toOption.getD ByteArray.empty).extract 12 32
+def designator : ByteArray := Simple7702.designator
 
 def validateImplementation (code : ByteArray) : Except String Unit := do
   if code.isEmpty || hex (keccak256 code) != implementationHash then
@@ -70,13 +75,24 @@ private def callWord (effects : Effects) (target : Nat) (data : ByteArray) : IO 
   if bytes.size != 32 then throw <| IO.userError "Contract did not return one uint256 word."
   return natOf bytes
 
+/-- EntryPoint credit pays only gas, never the ETH deposit principal. -/
+def requiredNativeBalance (depositValue maximumGasCost gasCredit : Nat) : Nat :=
+  depositValue + (maximumGasCost - gasCredit)
+
+private def entryPointGasCredit (effects : Effects) (sender : Nat) : IO Nat := do
+  try
+    callWord effects Bundler.entryPoint (Abi.selector "balanceOf(address)" ++
+      (← checked <| Abi.addressWord sender))
+  catch _ =>
+    throw <| IO.userError "Could not read the sender's EntryPoint gas credit. Check the RPC endpoint."
+
 private def codeAt (effects : Effects) (target : Nat) : IO ByteArray := do
   rpcBytes (← effects.rpc .getCode
     #[toJson (← checked <| address target), toJson ("latest" : String)]) 65536
 
-private def checkCode (effects : Effects) (sender : Nat) (first : Bool) : IO Unit := do
+private def checkCode (effects : Effects) (sender : Nat) (expected : ByteArray) : IO Unit := do
   let code ← codeAt effects sender
-  if (if first then !code.isEmpty else code != designator) then
+  if code != expected then
     throw <| IO.userError "Sender code or delegation changed; stop before another deposit."
   let _ ← checked <| validateImplementation (← codeAt effects implementation)
   let actualEntryPoint ← callWord effects implementation (Abi.selector "entryPoint()")
@@ -236,14 +252,20 @@ private def awaitBatch (effects : Effects) (operation : UserOperation)
 
 def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
     (sender : Nat) (rpcUrl bundlerUrl : String) (customBundler : Bool := false)
-    (bounds : Bundler.Bounds := {}) : IO String := do
+    (bounds : Bundler.Bounds := defaultBounds) (forceDelegated : Bool := false) : IO String := do
   let readings ← readingsWith effects items chain sender
-  let planned ← checked <| DepositMulti.plan items chain sender readings false
+  let initialGasCredit ← entryPointGasCredit effects sender
+  let planned ← checked <| DepositMulti.plan items chain sender readings false forceDelegated initialGasCredit
   if planned.mode != .simple7702 then
     throw <| IO.userError "This deposit selection uses the sequential transaction route."
-  checkCode effects sender true
+  let initialCode := readings.senderCode
+  let needsAuthorization := initialCode != designator
+  checkCode effects sender initialCode
   let chunks ← checked <| splitItems items (depositBatchLimit items[0]!.pool.asset)
   let initial ← checked <| initialJournal chunks chain sender rpcUrl bundlerUrl
+  let initial := initial.setObjVal! "initialSenderCode" (toJson (hex initialCode))
+    |>.setObjVal! "forceDelegated" (toJson forceDelegated)
+    |>.setObjVal! "reusedDelegation" (toJson (!needsAuthorization))
   let journal ← IO.mkRef initial
   effects.createJournal (journalBytes initial)
   let update (index : Nat) (fields : List (String × Json)) : IO Unit := do
@@ -257,20 +279,30 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
   for index in [0:chunks.size] do
     let first := index == 0
     let chunk := chunks[index]!
-    checkCode effects sender first
+    let expectedCode := if first then initialCode else designator
+    checkCode effects sender expectedCode
     let current ← readingsWith effects chunk chain sender
-    let sequence ← checked <| DepositMulti.plan chunk chain sender current true
+    let currentGasCredit ← entryPointGasCredit effects sender
+    -- This is an already selected batch route. Replan its exact calls with
+    -- the batch funding policy rather than the ordinary-transaction policy.
+    let sequence ← checked <| DepositMulti.plan chunk chain sender current false true currentGasCredit
     let steps := sequence.batches[0]!
     let data ← checked <| callsData steps
     let accountNonce ← entryNonce effects sender
     let (priority, maximum) ← fees effects customBundler
-    let mut authorization : Option Bundler.Authorization := none
-    if first then
+    let ownerNonce ← if first then do
       let pending ← nonce effects sender "pending"
       if pending >= 2 ^ 64 - 1 || pending != (← nonce effects sender "latest") then
-        throw <| IO.userError "Pending or unprocessable owner nonce; refusing delegation."
-      effects.approveDelegation s!"Authorize persistent Simple7702 delegation of {← checked <| address sender} to {← checked <| address implementation} on chain {chainNumber chain}. The signed authorization reaches bundler estimation and can be relayed even if the deposit is cancelled."
-      checkCode effects sender true
+        throw <| IO.userError "Pending or unprocessable owner nonce; refusing delegated deposits."
+      pure (some pending)
+    else pure none
+    let mut authorization : Option Bundler.Authorization := none
+    if first && needsAuthorization then
+      let pending := ownerNonce.get!
+      let change := if initialCode.isEmpty then "Install" else
+        s!"Replace the current delegation to {hex (initialCode.extract 3 23)} with"
+      effects.approveDelegation s!"{change} persistent Simple7702 delegation of {← checked <| address sender} to {← checked <| address implementation} on chain {chainNumber chain}. The signed authorization reaches bundler estimation and can be relayed even if the deposit is cancelled."
+      checkCode effects sender expectedCode
       if pending != (← nonce effects sender "pending") || pending != (← nonce effects sender "latest") then
         throw <| IO.userError "Owner nonce changed after delegation review."
       let digest ← checked <| Rlp.authorizationHash7702 (chainNumber chain) implementation pending
@@ -288,13 +320,20 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
     let stub ← checked <| parseHexBytes "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c"
     let baseline : UserOperation := {
       sender, nonce := accountNonce,
-      factory := if first then some .eip7702Marker else none,
-      authorizationAddress := if first then some implementation else none,
+      factory := if authorization.isSome then some .eip7702Marker else none,
+      authorizationAddress := if authorization.isSome then some implementation else none,
       callData := data, verificationGasLimit := 300000,
-      callGasLimit := 4000000, preVerificationGas := 100000,
+      callGasLimit := min bounds.maxCallGas
+        (steps.size * Tornado.Cli.DepositSend.maxTransactionGas + 100000),
+      preVerificationGas := 100000,
       maxPriorityFeePerGas := priority, maxFeePerGas := maximum,
       signature := stub }
     let estimateRequest ← checked <| Bundler.withAuthorization (chainNumber chain) baseline authorization
+    checkCode effects sender expectedCode
+    if let some expectedNonce := ownerNonce then
+      if (← nonce effects sender "pending") != expectedNonce ||
+          (← nonce effects sender "latest") != expectedNonce then
+        throw <| IO.userError "Owner nonce changed before batch estimation."
     let estimate ← effects.bundler .estimateUserOperationGas
       #[estimateRequest, toJson (← checked <| address Bundler.entryPoint)]
     let gas ← checked <| Bundler.parseEstimate estimate baseline bounds
@@ -302,29 +341,38 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
       verificationGasLimit := gas.verificationGasLimit,
       callGasLimit := gas.callGasLimit, preVerificationGas := gas.preVerificationGas }
     let _ ← checked <| Bundler.validate operation bounds
+    if operation.verificationGasLimit + operation.callGasLimit + operation.preVerificationGas +
+        operation.paymasterVerificationGasLimit + operation.paymasterPostOpGasLimit > maxOperationGas then
+      throw <| IO.userError "Deposit batch exceeds the sixteen million total gas bound; use a smaller deposit selection."
     let cost := Bundler.maximumGasCost operation
     let amount := chunk.foldl (fun sum item => sum + item.pool.amount) 0
-    if !chunk[0]!.pool.asset.token.isSome && cost > amount / 10 then
+    if !chunk[0]!.pool.asset.token.isSome &&
+        chunk.any (fun item => Tornado.Cli.DepositSend.valueGasDivisor item.pool.amount > 0) &&
+        cost > amount / 10 then
       throw <| IO.userError "Batch maximum network fee exceeds ten percent of ETH deposits."
     let senderBalance ← rpcQuantity (← effects.rpc .getBalance
       #[toJson (← checked <| address sender), toJson ("pending" : String)])
-    if senderBalance < cost + (if chunk[0]!.pool.asset.token.isSome then 0 else amount) then
-      throw <| IO.userError "Sender lacks the deposit amount and maximum network fee."
+    let gasCredit ← entryPointGasCredit effects sender
+    let depositValue := if chunk[0]!.pool.asset.token.isSome then 0 else amount
+    if senderBalance < requiredNativeBalance depositValue cost gasCredit then
+      throw <| IO.userError "Sender lacks the deposit amount and maximum gas funding after EntryPoint credit."
     let hash ← checked <| userOperationHash (chainNumber chain) Bundler.entryPoint operation
     let fromBlock ← rpcQuantity (← effects.rpc .blockNumber #[])
     effects.approveBatch s!"Batch {index + 1}/{chunks.size}: {chunk.size} deposit(s), {steps.size} ordered calls, amount {amount} base units, maximum gas cost {cost} wei, UserOperation {hex hash}, calldata {hex data}."
     -- Re-plan after asynchronous user approval so a changed token allowance
     -- cannot change the calls that will actually be signed.
-    checkCode effects sender first
+    checkCode effects sender expectedCode
     let afterRead ← readingsWith effects chunk chain sender
-    let afterPlan ← checked <| DepositMulti.plan chunk chain sender afterRead true
-    if (← checked <| callsData afterPlan.batches[0]!) != data ||
+    let afterCredit ← entryPointGasCredit effects sender
+    let afterPlan ← checked <| DepositMulti.plan chunk chain sender afterRead false true afterCredit
+    if afterRead.senderCode != expectedCode ||
+        (← checked <| callsData afterPlan.batches[0]!) != data ||
         (← entryNonce effects sender) != accountNonce ||
-        afterRead.ethBalance < cost + (if chunk[0]!.pool.asset.token.isSome then 0 else amount) then
-      throw <| IO.userError "Calls or account nonce changed after batch review."
-    if let some auth := authorization then
-      if (← nonce effects sender "pending") != auth.nonce ||
-          (← nonce effects sender "latest") != auth.nonce then
+        afterRead.ethBalance < requiredNativeBalance depositValue cost afterCredit then
+      throw <| IO.userError "Calls, account nonce or available gas funding changed after batch review."
+    if let some expectedNonce := ownerNonce then
+      if (← nonce effects sender "pending") != expectedNonce ||
+          (← nonce effects sender "latest") != expectedNonce then
         throw <| IO.userError "Owner nonce changed after batch review."
     let signature ← checkedSignature effects sender hash
     let finalOperation := { operation with signature := signature }
@@ -349,7 +397,18 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
     catch _ =>
       try update index [("status", toJson ("unknown" : String))] catch _ => pure ()
       throw <| IO.userError s!"Batch {hex hash} needs reconciliation; remaining deposits were stopped."
-  return s!"Confirmed {items.size} deposit(s) in {chunks.size} Simple7702 batch(es). Delegation persists."
+  let confirmed := s!"Confirmed {items.size} deposit(s) in {chunks.size} Simple7702 batch(es). Delegation persists."
+  -- Confirmation is already durable. This optional readout cannot make a
+  -- successful deposit look failed or encourage another funding attempt.
+  let creditSummary ← try
+      let actualChain ← rpcQuantity (← effects.rpc .chainId #[])
+      if actualChain != chainNumber chain then
+        throw <| IO.userError "RPC network changed after confirmation."
+      let credit ← entryPointGasCredit effects sender
+      pure s!"Remaining EntryPoint gas credit: {formatUnitsExact credit 18} ETH (reused for future UserOperations)."
+    catch _ =>
+      pure "Remaining EntryPoint gas credit could not be read; the deposits remain confirmed."
+  return confirmed ++ "\n" ++ creditSummary
 
 private def absolutePath (path : String) : IO String := do
   let current ← IO.currentDir
@@ -358,7 +417,8 @@ private def absolutePath (path : String) : IO String := do
 /-- Live adapter for explicitly selected experimental batching. It shares
 the sender lock and permanent invoice claims with sequential native sends. -/
 def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
-    (chain : ChainId) (customBundler : Bool := false) (yes : Bool := false) : IO String := do
+    (chain : ChainId) (customBundler : Bool := false) (yes : Bool := false)
+    (forceDelegated : Bool := false) (nonInteractive : Bool := false) : IO String := do
   let keyPath ← absolutePath keyFile
   let sender ← NativeSigner.addressFromProtectedFile keyPath
   let senderText ← checked <| address sender
@@ -367,7 +427,8 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
     | throw <| IO.userError "Private note backup is not UTF-8."
   let items ← checked <| DepositMulti.publicItems text chain
   let readings ← DepositMulti.liveReadings rpcUrl items chain sender
-  let plan ← checked <| DepositMulti.plan items chain sender readings false
+  let gasCredit ← DepositMulti.gasCreditForPlan rpcUrl items sender readings false forceDelegated
+  let plan ← checked <| DepositMulti.plan items chain sender readings false forceDelegated gasCredit
   if plan.mode != .simple7702 then
     throw <| IO.userError "This selection requires the sequential transaction route."
   let journalPath ← absolutePath journalPath
@@ -378,7 +439,7 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
   let lockBytes := ((Json.mkObj [("version", toJson (1 : Nat)),
     ("kind", toJson ("sender-lock" : String)), ("sender", toJson senderText),
     ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-  WithdrawalJournalProgram.createProtected lockPath lockBytes
+  DepositSend.createProtectedFile .senderLock lockPath lockBytes
   let created ← IO.mkRef (#[] : Array (String × ByteArray))
   try
     for item in items do
@@ -390,13 +451,17 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
         ("chainId", toJson (chainNumber chain)), ("pool", toJson item.pool.address),
         ("commitment", toJson (hex item.commitment)),
         ("sender", toJson senderText), ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-      WithdrawalJournalProgram.createProtected claimPath content
+      DepositSend.createProtectedFile .invoiceClaim claimPath content
       created.modify (·.push (claimPath, content))
   catch error =>
     for (path, content) in (← created.get) do
       try ProtectedIO.removePrivateExact path content catch _ => pure ()
     try ProtectedIO.removePrivateExact lockPath lockBytes catch _ => pure ()
     throw error
+  IO.println s!"Sender: {senderText}; {items.size} deposit(s); route: ERC-4337 Simple7702 UserOperation(s)."
+  IO.println s!"Journal: {journalPath}"
+  if Simple7702.isCompatible readings.senderCode then
+    IO.println "Reusing the existing matching Simple7702 delegation."
   let nextId ← IO.mkRef (1 : Nat)
   let fetch (url : String) (method : JsonRpc.Method) (params : Array Json) : IO Json := do
     let id ← nextId.get
@@ -405,31 +470,33 @@ def experimentalSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
   let effects : Effects := {
     rpc := fetch rpcUrl, bundler := fetch bundlerUrl,
     signDigest := NativeSigner.signDigest65FromProtectedFile keyPath,
-    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    createJournal := DepositSend.createProtectedFile .journal journalPath,
     replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
-    waitFinality := ProtectedTxSender.waitReceiptDepth rpcUrl,
+    waitFinality := ProtectedTxSender.confirmReceiptInclusion rpcUrl,
     approveDelegation := fun review => do
       IO.println review
-      IO.println "Type DELEGATE to authorize persistent EIP-7702 delegation:"
-      if jsTrim (← (← IO.getStdin).getLine) != "DELEGATE" then
-        throw <| IO.userError "Delegation cancelled before signing.",
+      if !nonInteractive then
+        IO.println "Type DELEGATE to authorize persistent EIP-7702 delegation:"
+        if jsTrim (← (← IO.getStdin).getLine) != "DELEGATE" then
+          throw <| IO.userError "Delegation cancelled before signing.",
     approveBatch := fun review => do
       IO.println review
-      if !yes then
+      if !yes && !nonInteractive then
         IO.println "Type SEND to sign and submit this one batch:"
         if jsTrim (← (← IO.getStdin).getLine) != "SEND" then
           throw <| IO.userError "Batch cancelled before signing." }
-  let result ← try executeWith effects items chain sender rpcUrl bundlerUrl customBundler
-    catch _ =>
-      throw <| IO.userError s!"Batched deposit stopped. Inspect {journalPath} and sender delegation; lock remains at {lockPath}. Do not retry until all signed candidates and delegation are reconciled."
+  let result ← try executeWith effects items chain sender rpcUrl bundlerUrl customBundler defaultBounds forceDelegated
+    catch error =>
+      throw <| IO.userError s!"{error}\nBatched deposit stopped. Inspect {journalPath} and sender delegation; lock remains at {lockPath}. Do not retry until all signed candidates and delegation are reconciled."
   ProtectedIO.removePrivateExact lockPath lockBytes
   return result
 
-/-- Match the pinned CLI's automatic route choice. Existing sender code,
-a single deposit without approval, or an explicit sequential preference use
-ordinary transactions; an undelegated EOA with a multi-call plan uses 7702. -/
+/-- Single notes default to ordinary transactions. Multiple notes may reuse
+an exact Simple7702 delegation automatically. Explicit delegated mode can
+install or replace an EOA delegation; ordinary contract code is rejected. -/
 def experimentalAutoSend (notesFile keyFile rpcUrl bundlerUrl journalPath : String)
-    (chain : ChainId) (forceSequential customBundler yes : Bool) : IO String := do
+    (chain : ChainId) (forceSequential customBundler yes : Bool)
+    (forceDelegated : Bool := false) (nonInteractive : Bool := false) : IO String := do
   let keyPath ← absolutePath keyFile
   let sender ← NativeSigner.addressFromProtectedFile keyPath
   let bytes ← ProtectedIO.readPrivate (← absolutePath notesFile)
@@ -437,12 +504,13 @@ def experimentalAutoSend (notesFile keyFile rpcUrl bundlerUrl journalPath : Stri
     | throw <| IO.userError "Private note backup is not UTF-8."
   let items ← checked <| DepositMulti.publicItems text chain
   let readings ← DepositMulti.liveReadings rpcUrl items chain sender
-  let selected ← checked <| DepositMulti.plan items chain sender readings forceSequential
+  let gasCredit ← DepositMulti.gasCreditForPlan rpcUrl items sender readings forceSequential forceDelegated
+  let selected ← checked <| DepositMulti.plan items chain sender readings forceSequential forceDelegated gasCredit
   match selected.mode with
   | .sequential =>
-    Tornado.Cli.DepositMultiSend.experimentalSend notesFile keyFile rpcUrl journalPath chain yes
+    Tornado.Cli.DepositMultiSend.experimentalSend notesFile keyFile rpcUrl journalPath chain yes nonInteractive
   | .simple7702 =>
-    experimentalSend notesFile keyFile rpcUrl bundlerUrl journalPath chain customBundler yes
+    experimentalSend notesFile keyFile rpcUrl bundlerUrl journalPath chain customBundler yes forceDelegated nonInteractive
 
 end Tornado.Cli.DepositBatch7702
 

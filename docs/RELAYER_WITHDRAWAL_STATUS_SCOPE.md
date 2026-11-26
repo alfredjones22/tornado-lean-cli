@@ -1,7 +1,7 @@
 # Native Classic relayer withdrawal status
 
 [`Tornado/Cli/RelayerWithdrawalStatus.lean`](../Tornado/Cli/RelayerWithdrawalStatus.lean)
-reconciles a protected TypeScript Classic-relayer status record using the
+reconciles a protected Classic-relayer status record using the
 selected Ethereum RPC. It validates the chain and pinned original Classic
 pool, scans the recorded `fromBlock` through the current head in bounded
 `eth_getLogs` windows, and checks an exact on-chain pool `Withdrawal` event
@@ -15,8 +15,7 @@ This implementation does **not query the relayer job endpoint**. A relayer's
 job ID is printed for reference but is not treated as proof. Pending, failed,
 no-job, no-range, RPC outage, malformed data, incomplete scan, multiple
 matching events, and conflicting withdrawal details stay `unknown` (exit
-code 2). This is conservative partial parity with the pinned TypeScript
-command, which can also report relayer `pending` or `failed` from job claims.
+code 2). Job claims alone never establish a terminal on-chain outcome.
 The scan is capped at 1,024 windows of 1,000 blocks and 100,000 returned
 logs; older or unusually large ranges need manual or further tooling.
 

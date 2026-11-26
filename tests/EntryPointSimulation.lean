@@ -26,6 +26,19 @@ def main : IO UInt32 := do
   require (Bundler.dataHex encoded == expectedBytes) "handleOps ABI differs from pinned viem"
   let params ← checked (requestParams op)
   require (params.size == 2) "Invalid signed simulation request framing"
+  let deploymentOperation := { op with verificationGasLimit := 1450271 }
+  require (!(requestParams deploymentOperation).isOk)
+    "Default signed simulation verification-gas ceiling was relaxed"
+  let deploymentBounds : Bundler.Bounds := { maxVerificationGas := 2000000 }
+  let deploymentParams ← checked (requestParams deploymentOperation deploymentBounds)
+  require (deploymentParams.size == 2)
+    "Reviewed deployment gas bounds were not passed to signed simulation"
+  require (!(requestParams { deploymentOperation with verificationGasLimit := 2000001 }
+      deploymentBounds).isOk)
+    "Scoped signed simulation exceeded its deployment verification-gas ceiling"
+  require (!(requestParams { deploymentOperation with callGasLimit := 8000001 }
+      deploymentBounds).isOk)
+    "Scoped signed simulation relaxed an unrelated execution-gas ceiling"
   let nullifier ← checked (Abi.uintWord 7)
   let expected : List Events.ExpectedWithdrawal := [{
     pool := 0x199112eb461ea7eec1d75b33343542e1d069b41c,

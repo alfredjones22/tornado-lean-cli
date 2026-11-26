@@ -194,6 +194,15 @@ def main : IO Unit := do
   let note ← checked "backup" (parseDepositBackup fixtureNote .mainnet)
   let selected := note.head!
   let good ← mock selected {}
+  let selectedHistory ← History.syncPublic good selected.note.pool
+  let missingPublicDeposit ← try
+      let _ ← History.inspectPublicFromSynced good selectedHistory (word 42) (word 43)
+      pure ""
+    catch error => pure error.toString
+  require "missing selected deposit has recent-RPC, network and backup guidance"
+    (missingPublicDeposit.contains "Deposit not found" &&
+      missingPublicDeposit.contains "RPC catch up" && missingPublicDeposit.contains "--chain" &&
+      !missingPublicDeposit.contains "unique")
   let natOf (raw : String) : IO Nat := do
     return (← checked "public identity" (parseHexBytes raw)).data.foldl
       (fun n byte => n * 256 + byte.toNat) 0

@@ -43,6 +43,6 @@ prefix still accepts a caller-supplied root; neither module proves that root
 is recent, accepted on-chain, or unspent. Proof generation and Groth16 pairing
 verification remain separate requirements.
 
-No JavaScript is called by the Lean runtime module or its parity test. The
+No JavaScript is called by the Lean runtime module or its fixture test. The
 pinned full witness used as the comparison oracle was generated upstream and
 is public test data; runtime witness production itself is native Lean.

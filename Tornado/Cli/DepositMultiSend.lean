@@ -68,6 +68,7 @@ structure Effects where
   sign : Rlp.Transaction1559 → IO (Nat × TypedTransaction.SignedTyped)
   approve : String → IO Unit
   waitFinality : RpcReceipt.Receipt → IO Unit
+  progress : String → IO Unit := fun _ => pure ()
 
 private def contractWord (effects : Effects) (id target : Nat)
     (data : ByteArray) : IO Nat := do
@@ -90,7 +91,7 @@ private def selectedItem (items : Array Item) (step : DepositSend.Step) :
   if found.size != 1 then throw "Deposit call has no unique selected note."
   return found[0]!
 
-private def recheckStep (effects : Effects) (items : Array Item)
+def recheckStep (effects : Effects) (items : Array Item)
     (sender : Nat) (step : DepositSend.Step) : IO Unit := do
   if step.kind != .deposit then return
   let item ← checked <| selectedItem items step
@@ -106,7 +107,7 @@ private def recheckStep (effects : Effects) (items : Array Item)
     if balance < item.pool.amount || allowance < item.pool.amount then
       throw <| IO.userError "Token balance or allowance changed before deposit."
 
-private def validateStepReceipt (effects : Effects) (sender : Nat)
+def validateStepReceipt (effects : Effects) (sender : Nat)
     (step : DepositSend.Step) (receipt : RpcReceipt.Receipt) : IO Unit := do
   if step.kind == .deposit then
     let expected : Events.ExpectedDeposit := ⟨step.pool, step.commitment⟩
@@ -122,7 +123,7 @@ private def validateStepReceipt (effects : Effects) (sender : Nat)
 advance to another note. All approvals and deposits use fresh nonce/fee reads. -/
 def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
     (sender : Nat) (readings : Readings)
-    (bounds : ProtectedTxSender.Bounds := {}) : IO String := do
+    (bounds : ProtectedTxSender.Bounds := { maxGas := DepositSend.maxTransactionGas }) : IO String := do
   let planned ← checked <| DepositMulti.plan items chain sender readings true
   if planned.mode != .sequential || planned.batches.size != 1 then
     throw <| IO.userError "Expected a sequential native deposit plan."
@@ -160,17 +161,25 @@ def executeWith (effects : Effects) (items : Array Item) (chain : ChainId)
       validateReceipt := validateStepReceipt effects sender step,
       waitFinality := effects.waitFinality }
     let call : ProtectedTxSender.Call := ⟨step.to, step.data, step.value, step.label⟩
-    let _ ← ProtectedTxSender.sendWith txEffects (chainNumber chain) sender call bounds
+    let _ ← ProtectedTxSender.sendWith txEffects (chainNumber chain) sender call
+      (DepositSend.stepBounds bounds step.value)
   return s!"Confirmed {items.size} deposit(s) in {steps.size} sequential transaction(s)."
 
 private def absolutePath (path : String) : IO String := do
   let current ← IO.currentDir
   return if (System.FilePath.mk path).isAbsolute then path else (current / path).toString
 
+/-- Retain the diagnostic and recovery context without changing journal state
+    or treating a failure as permission to retry. -/
+def withFailureContext (journalPath senderLock : String) (action : IO α) : IO α := do
+  try action
+  catch error =>
+    throw <| IO.userError s!"{error}\nDeposit sequence stopped. Inspect {journalPath}; sender lock remains at {senderLock}. Do not clear the lock or retry until every recorded hash is reconciled. For sequential ETH deposits, rerun the same command and original journal with --resume."
+
 /-- Live sequential adapter. Explicit experimental mode is selected by Main;
 this function never treats a previous journal or claim as permission to retry. -/
 def experimentalSend (notesFile keyFile rpc journalPath : String)
-    (chain : ChainId) (yes : Bool := false) : IO String := do
+    (chain : ChainId) (yes : Bool := false) (nonInteractive : Bool := false) : IO String := do
   let keyPath ← absolutePath keyFile
   let sender ← NativeSigner.addressFromProtectedFile keyPath
   let senderText ← checked <| address sender
@@ -188,7 +197,7 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
   let lockBytes := ((Json.mkObj [("version", toJson (1 : Nat)),
     ("kind", toJson ("sender-lock" : String)), ("sender", toJson senderText),
     ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-  WithdrawalJournalProgram.createProtected senderLock lockBytes
+  DepositSend.createProtectedFile .senderLock senderLock lockBytes
   let created ← IO.mkRef (#[] : Array (String × ByteArray))
   try
     for item in items do
@@ -200,7 +209,7 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
         ("chainId", toJson (chainNumber chain)), ("pool", toJson item.pool.address),
         ("commitment", toJson (hex item.commitment)),
         ("sender", toJson senderText), ("journal", toJson journalPath)]).compress ++ "\n").toUTF8
-      WithdrawalJournalProgram.createProtected claimPath claim
+      DepositSend.createProtectedFile .invoiceClaim claimPath claim
       created.modify (·.push (claimPath, claim))
   catch error =>
     for (path, content) in (← created.get) do
@@ -211,20 +220,19 @@ def experimentalSend (notesFile keyFile rpc journalPath : String)
   IO.println s!"Journal: {journalPath}"
   let effects : Effects := {
     rpc := HttpTransport.call rpc,
-    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    createJournal := DepositSend.createProtectedFile .journal journalPath,
     replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
     sign := NativeSigner.sign1559FromProtectedFile keyPath,
-    waitFinality := ProtectedTxSender.waitReceiptDepth rpc,
+    waitFinality := ProtectedTxSender.confirmReceiptInclusion rpc,
     approve := fun text => do
       IO.println text
-      if !yes then
+      if !yes && !nonInteractive then
         IO.println "Type SEND to sign and submit this one transaction:"
         let answer ← (← IO.getStdin).getLine
         if jsTrim answer != "SEND" then
           throw <| IO.userError "Deposit cancelled before signing." }
-  let result ← try executeWith effects items chain sender readings
-    catch _ =>
-      throw <| IO.userError s!"Deposit sequence stopped. Inspect {journalPath}; sender lock remains at {senderLock}. Do not clear the lock or retry until every recorded hash is reconciled."
+  let result ← withFailureContext journalPath senderLock
+    (executeWith effects items chain sender readings)
   ProtectedIO.removePrivateExact senderLock lockBytes
   return result
 

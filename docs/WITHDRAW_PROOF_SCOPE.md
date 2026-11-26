@@ -21,9 +21,8 @@ fee. Neither relayer registration nor an external fee quote is checked here.
 The returned `Call`
 contains only public pool, recipient, relayer, fee, root, nullifier hash, proof
 bytes, calldata, and history head. It contains no note preimage or Merkle
-witness. A direct pool call is distinct from the pinned TypeScript CLI's
-EIP-4337 paymaster submission path; this module does not construct a
-UserOperation or relayer job.
+witness. This module constructs a pool call, not an ERC-4337 UserOperation
+or relayer job; submission adapters are separate.
 
 The public deterministic fixture test uses a synthetic one-deposit pool state
 and fixed `r=1,s=2` solely to compare its 256 proof bytes against the pinned

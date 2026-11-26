@@ -2,7 +2,7 @@
 
 [`RpcReceipt.lean`](../Tornado/Protocol/RpcReceipt.lean) parses the
 `eth_getTransactionReceipt` and `eth_getUserOperationReceipt` JSON-RPC result
-shapes used by the pinned TypeScript CLI. It shares the native JSON-RPC 2.0
+shapes used by the native command adapters. It shares the native JSON-RPC 2.0
 envelope and quantity parser with `Tornado/Runtime/JsonRpc.lean`.
 
 The parser requires the requested transaction hash, block hash and number,

@@ -37,6 +37,16 @@ def main : IO UInt32 := do
     prepared.checked.meaning.batches[0]![0]!.value == ethA.amount &&
     prepared.checked.meaning.batches[0]![1]!.value == ethB.amount)
     "The actual planner lost denomination-valued deposit order."
+  let exactPrincipal := ethA.amount + ethB.amount
+  let creditPrepared ← checked <| DepositMulti.preparePlan items .mainnet 123
+    { readings with ethBalance := exactPrincipal } false false 1
+  require (creditPrepared.input.ethBalance == exactPrincipal &&
+    creditPrepared.input.entryPointGasCredit == 1)
+    "Certified deposit input replaced a real wallet balance with EntryPoint credit."
+  rejecting { creditPrepared.input with entryPointGasCredit := 0 }
+    (DepositMulti.planEncoding creditPrepared.output)
+  rejecting { creditPrepared.input with ethBalance := exactPrincipal - 1, entryPointGasCredit := 10 ^ 20 }
+    (DepositMulti.planEncoding creditPrepared.output)
   let steps := plan.batches[0]!
   for changed in #[
     { steps[0]! with to := 8 }, { steps[0]! with value := ethA.amount + 1 },

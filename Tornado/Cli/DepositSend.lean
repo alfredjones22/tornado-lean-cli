@@ -9,6 +9,7 @@ import Tornado.Protocol.DepositIntent
 import Tornado.Runtime.HttpTransport
 import Tornado.Runtime.NativeSigner
 import Tornado.Runtime.ProtectedIO
+import Tornado.Runtime.ProtectedTxSender
 import Tornado.Cli.PrivateKeyInput
 
 /-!
@@ -24,6 +25,53 @@ preimage is placed in calls or journal records.
 namespace Tornado.Cli.DepositSend
 
 open Lean Tornado.Domain Tornado.Protocol Tornado.Crypto Tornado.Runtime
+
+inductive DepositFileKind where
+  | senderLock | invoiceClaim | journal
+
+/-- Keep exclusive creation and existing reservations intact; only translate
+    a structured already-exists failure into deposit-specific recovery advice. -/
+def createProtectedFile (kind : DepositFileKind) (path : String)
+    (contents : ByteArray) : IO Unit := do
+  try WithdrawalJournalProgram.createProtected path contents
+  catch error =>
+    match error with
+    | .alreadyExists _ _ _ =>
+      let message := match kind with
+        | .senderLock =>
+          "A deposit sender lock already exists: " ++ path ++
+          "\nA previous attempt may be pending or unfinished. Inspect its original journal with deposit status. For a sequential ETH plan, continue with the original notes and journal using deposit send --resume. Reconcile every recorded hash before removing this lock."
+        | .invoiceClaim =>
+          "A deposit reservation already exists for this note commitment: " ++ path ++
+          "\nClaims normally remain after a successful deposit to prevent funding the same commitment twice. Inspect the original journal with deposit status; use deposit send --resume for an unfinished sequential ETH plan. Do not delete Tornado dotfiles just to bypass the reservation."
+        | .journal =>
+          "A deposit journal already exists: " ++ path ++
+          "\nKeep the original journal. For a sequential ETH plan, rerun deposit send with the same notes and journal plus --resume. Other routes require reconciliation before another attempt."
+      throw <| IO.userError message
+    | _ => throw error
+
+/-- Classic pool deposits can need more than one million gas. Allow a bounded
+    two million including estimation headroom; fee-cost caps remain separate. -/
+def maxTransactionGas : Nat := 2000000
+
+/-- Small deposits can cost more than ten percent of their denomination to
+    execute. Keep the absolute fee ceiling for them and approvals. -/
+def valueGasDivisor (value : Nat) : Nat :=
+  if value ≤ 10000000000000000 then 0 else 10
+
+/-- The native deposit fee ceiling: 0.02 ETH, with an additional ten-percent
+    limit only when the value is greater than 0.01 ETH. -/
+def gasCostLimit (value : Nat) : Nat :=
+  if valueGasDivisor value == 0 then 20000000000000000
+  else min 20000000000000000 (value / 10)
+
+/-- Adapt the ordinary default relative limit per deposit. Stricter custom
+    relative divisors and lower absolute caller ceilings remain effective. -/
+def stepBounds (bounds : ProtectedTxSender.Bounds) (value : Nat) : ProtectedTxSender.Bounds :=
+  { bounds with
+    maxGasCostWei := min bounds.maxGasCostWei 20000000000000000
+    valueGasDivisor := if value > 0 && valueGasDivisor value == 0 &&
+      bounds.valueGasDivisor == 10 then 0 else bounds.valueGasDivisor }
 
 inductive StepKind where
   | reset | approve | deposit
@@ -130,7 +178,7 @@ def invoiceIntent (invoice : PublicInvoice) (sender : Nat) (readings : Readings)
   return {
     items := #[{ pool, token, denomination := invoice.pool.amount, commitment := commitment.data }],
     sender, chainId := chainNumber invoice.pool.chainId, actualChainId := readings.chainId,
-    senderHasCode := false, ethBalance := readings.ethBalance, tokenBalance := readings.tokenBalance,
+    senderCode := #[], ethBalance := readings.ethBalance, tokenBalance := readings.tokenBalance,
     pools := #[{ address := pool, denomination := readings.denomination, allowance := readings.allowance }],
     forceSequential := true, limit := depositBatchLimit invoice.pool.asset }
 
@@ -425,15 +473,12 @@ private def transactionFor (effects : Effects) (chainId sender : Nat)
     ("value", toJson (quantityText step.value))]
   let estimate ← rpcQuantity (← effects.rpc (baseId + 1) .estimateGas #[call])
   let gas := estimate * 120 / 100 + 1
-  if estimate == 0 || gas > 1000000 then
-    throw <| IO.userError "RPC gas estimate is zero or exceeds the native limit."
+  if estimate == 0 || gas > maxTransactionGas then
+    throw <| IO.userError s!"RPC gas estimate {estimate} (buffered: {gas}) is zero or exceeds the native limit of {maxTransactionGas}."
   let (priority, maxFee) ← feeQuote effects (baseId + 2)
   let maxGasCost := gas * maxFee
-  let absoluteGasLimit := 20000000000000000 -- 0.02 ETH per transaction
-  let valueRelativeLimit := if step.value > 0 then step.value / 10
-    else absoluteGasLimit
-  if maxGasCost > absoluteGasLimit || maxGasCost > valueRelativeLimit then
-    throw <| IO.userError "The quoted maximum gas cost exceeds the experimental safety cap."
+  if maxGasCost > gasCostLimit step.value then
+    throw <| IO.userError "The quoted maximum gas cost exceeds the safety cap."
   let balance ← rpcQuantity (← effects.rpc (baseId + 3) .getBalance
     #[toJson senderText, toJson ("pending" : String)])
   if balance < step.value + maxGasCost then
@@ -529,44 +574,15 @@ def executeWith (effects : Effects) (invoice : PublicInvoice) (sender : Nat)
     journal := confirmed
   return s!"Confirmed {steps.size} sequential transaction(s)."
 
-/-- Require twelve numbered-chain confirmations and the same receipt block
-    before a step can unlock the sender or advance to the next transaction.
-    This reduces shallow reorg risk; the RPC and eventual finality remain
-    external assumptions. -/
-private def waitReceiptDepth (rpc : String) (original : RpcReceipt.Receipt) : IO Unit := do
-  for attempt in [0:180] do
-    let id := 8000 + attempt * 3
-    let head ← rpcQuantity (← HttpTransport.call rpc id .blockNumber #[])
-    if head >= original.blockNumber + 11 then
-      let block ← HttpTransport.call rpc (id + 1) .getBlockByNumber
-        #[toJson (quantityText original.blockNumber), toJson false]
-      if block == .null then
-        throw <| IO.userError "Confirmed transaction block disappeared; reconcile before another send."
-      let blockNumber ← rpcQuantity (← fromExcept <| block.getObjVal? "number")
-      let blockHashText ← fromExcept <| (← fromExcept <| block.getObjVal? "hash").getStr?
-      let blockHash ← fromExcept <| parseHexBytes blockHashText
-      if !blockHashText.startsWith "0x" || blockHash != original.blockHash ||
-          blockNumber != original.blockNumber then
-        throw <| IO.userError "Transaction block changed during confirmation wait; reconcile before another send."
-      let rawReceipt ← HttpTransport.call rpc (id + 2) .getTransactionReceipt
-        #[toJson (fixedHex original.transactionHash)]
-      if rawReceipt == .null then
-        throw <| IO.userError "Transaction receipt disappeared during confirmation wait."
-      let latest ← fromExcept <| RpcReceipt.parseReceipt rawReceipt original.transactionHash
-      if latest.blockHash != original.blockHash ||
-          latest.blockNumber != original.blockNumber ||
-          latest.transactionIndex != original.transactionIndex ||
-          latest.origin != original.origin || latest.to != original.to ||
-          latest.success != original.success then
-        throw <| IO.userError "Transaction receipt changed during confirmation wait."
-      return
-    IO.sleep 2000
-  throw <| IO.userError "Twelve confirmations were not observed; reconcile before another send."
+/-- Recheck one observed inclusion before advancing. This is RPC evidence,
+    not consensus finality or a guarantee against later chain reorganization. -/
+private def waitReceiptDepth (rpc : String) (original : RpcReceipt.Receipt) : IO Unit :=
+  ProtectedTxSender.confirmReceiptInclusion rpc original
 
 /-- Explicitly experimental live send. The caller must request this route,
     review each exact transaction, and supply a new private journal path. -/
 def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
-    (chain : ChainId) (yes : Bool) : IO String := do
+    (chain : ChainId) (yes : Bool) (nonInteractive : Bool := false) : IO String := do
   let keyPath ← absolutePrivatePath keyFile
   let sender ← NativeSigner.addressFromProtectedFile keyPath
   let invoice ← readInvoice invoiceFile chain
@@ -591,9 +607,9 @@ def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
     ("version", toJson (1 : Nat)), ("kind", toJson ("sender-lock" : String)),
     ("sender", toJson senderText), ("journal", toJson journalPath),
     ("claim", toJson claimPath)]).compress ++ "\n").toUTF8
-  WithdrawalJournalProgram.createProtected senderLock lockBytes
+  createProtectedFile .senderLock senderLock lockBytes
   try
-    WithdrawalJournalProgram.createProtected claimPath claimBytes
+    createProtectedFile .invoiceClaim claimPath claimBytes
   catch error =>
     try ProtectedIO.removePrivateExact senderLock lockBytes
     catch _ => pure ()
@@ -603,16 +619,15 @@ def experimentalPayInvoice (invoiceFile keyFile rpc journalPath : String)
   IO.println s!"Journal: {journalPath}"
   IO.println s!"Permanent invoice claim: {claimPath}"
   IO.println s!"Sender lock until exact confirmation: {senderLock}"
-  IO.println "Experimental native signing keeps the key outside Lean; the complete funded path has not been audited or certified."
   let effects : Effects := {
     rpc := HttpTransport.call rpc,
-    createJournal := WithdrawalJournalProgram.createProtected journalPath,
+    createJournal := createProtectedFile .journal journalPath,
     replaceJournal := WithdrawalJournalProgram.replaceProtected journalPath,
     sign := NativeSigner.sign1559FromProtectedFile keyPath,
     waitFinality := waitReceiptDepth rpc,
     approve := fun review => do
       IO.println review
-      if !yes then
+      if !yes && !nonInteractive then
         IO.println "Type SEND to sign and submit this one transaction:"
         let answer ← (← IO.getStdin).getLine
         if jsTrim answer != "SEND" then
