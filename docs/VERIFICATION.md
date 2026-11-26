@@ -4,6 +4,15 @@ Use the repository's pinned Lean toolchain and Node 22.18 or newer. The
 standalone executable remains native Lean; Node is development tooling for
 the checks and independent compatibility oracles.
 
+The CLI's native encrypted-keystore boundary requires `pkg-config` and OpenSSL
+libcrypto 3.2 or newer, including the default-provider `KECCAK-256` digest,
+plus libsodium 1.0.18 or newer for compatible scrypt.
+Install the development headers/library with the platform package manager;
+Homebrew's `openssl@3`, `libsodium` and `pkg-config` provide them on macOS. A custom prefix
+can be selected through `PKG_CONFIG_PATH`. Lake discovers compiler/linker flags
+at configuration time and links libcrypto directly; it does not execute an
+external decryptor at runtime. LeanCrypto's standalone package is unaffected.
+
 ## Kernel and source gate
 
 ```sh
@@ -41,6 +50,18 @@ lake env lean --run tests/AbiDecode.lean
 lake env lean --run tests/BatchWithdrawalIntent.lean
 lake env lean --run tests/ByteEntropy.lean
 ```
+
+Encrypted account-key coverage uses only public synthetic keys and standard
+v3 vectors. Build the CLI and native test helper, then run:
+
+```sh
+lake build tornado encrypted_keyfile_test
+python3 -I scripts/test-encrypted-keyfiles.py
+```
+
+The tests cover both KDFs, native identity/signing, wrong passwords and malformed
+metadata, protected files, password sources, source replacement, hidden entry
+and non-interactive CLI admission. They make no funded network transaction.
 
 Modules which exercise native private-file, signing or process boundaries
 need their compiled Lake test targets. Their correct invocation is recorded

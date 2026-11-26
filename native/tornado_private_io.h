@@ -3,6 +3,7 @@
 
 #include <lean/lean.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #define TORNADO_MAX_HEX_KEY_FILE 1024u
 
@@ -44,7 +45,17 @@ typedef enum {
     TORNADO_KEY_SIGNATURE_FORMAT,
     TORNADO_KEY_VERIFY,
     TORNADO_KEY_RECOVERY,
-    TORNADO_KEY_DIGEST_SIZE
+    TORNADO_KEY_DIGEST_SIZE,
+    TORNADO_KEY_KEYSTORE_SIZE,
+    TORNADO_KEY_KEYSTORE_FORMAT,
+    TORNADO_KEY_KEYSTORE_UNSUPPORTED,
+    TORNADO_KEY_KEYSTORE_BUDGET,
+    TORNADO_KEY_KEYSTORE_PASSWORD,
+    TORNADO_KEY_KEYSTORE_CRYPTO,
+    TORNADO_KEY_KEYSTORE_ADDRESS,
+    TORNADO_KEY_KEYSTORE_CHANGED,
+    TORNADO_KEY_PASSWORD_FILE,
+    TORNADO_KEY_PASSWORD_FORMAT
 } tornado_key_status;
 
 /* Internal C-only helper. Both output buffers must live in caller-owned
@@ -53,6 +64,15 @@ typedef enum {
 int tornado_private_read_secp256k1_key(
     b_lean_obj_arg path, uint8_t key32[32],
     uint8_t scratch[TORNADO_MAX_HEX_KEY_FILE], tornado_key_status *status);
+
+/* Protected byte read for native-only key/password handling; never returns a
+ * Lean buffer. The caller must supply and clear suitably protected storage. */
+typedef struct { uint64_t values[7]; } tornado_key_file_stamp;
+int tornado_private_key_material_size(b_lean_obj_arg path, size_t capacity,
+    size_t *size, tornado_key_status *status);
+int tornado_private_read_key_material(b_lean_obj_arg path,
+    uint8_t *scratch, size_t capacity, size_t *size, tornado_key_status *status,
+    tornado_key_file_stamp *stamp);
 
 /* C-only helpers for the terminal signer. The input/output buffers remain
  * native; the anchor validation does not create or read a key file. */

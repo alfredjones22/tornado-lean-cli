@@ -25,6 +25,7 @@ private def checked (value : Except String α) : IO α :=
 structure Options where
   file : Option String := none
   keyFile : Option String := none
+  passwords : NativeSigner.PasswordOptions := {}
   recipient : Option String := none
   callsFile : Option String := none
   noteIndex : Option String := none
@@ -52,6 +53,11 @@ private def valueOption (name value : String) (options : Options) : Except Strin
   match name with
   | "--note-file" | "--notes-file" => return { options with file := some value }
   | "--owner-key-file" => return { options with keyFile := some value }
+  | "--pwd" =>
+    throw "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" =>
+    let passwords ← options.passwords.withPasswordFile value
+    return { options with passwords }
   | "--recipient" | "--receiver" => return { options with recipient := some value }
   | "--contract-calls" => return { options with callsFile := some value }
   | "--note-index" => return { options with noteIndex := some value }
@@ -203,13 +209,18 @@ private def runSponsored (options : Options) (batch : Bool) : IO (String × UInt
   if options.yes then fail "Withdrawals require typed WITHDRAW approval; --yes is unavailable."
   if batch && options.nonInteractive && options.keyFile.isNone then
     fail "--non-interactive requires --owner-key-file for batch withdrawals."
+  if !batch && (options.keyFile.isSome || options.passwords.hasSource) then
+    fail "Account key and password options require batch withdrawals."
   if options.retryRejected then fail "Existing attempts must be reconciled; withdrawals do not replace a reserved candidate."
   if options.route != "4337" then fail "Sponsored withdrawals require --route 4337."
   let some inputFile := options.file | fail "Provide a protected note backup."
   let noteFile ← absolute inputFile
   let chain ← checked <| parseChainInput options.chain
   let chainId := chainNumber chain
-  let ownerSource ← if batch then NativeSigner.resolveKeyFile options.keyFile else pure ""
+  let ownerSource ← if batch then do
+      NativeSigner.resolveKeyFile options.keyFile none
+        { options.passwords with nonInteractive := options.nonInteractive }
+    else pure ""
   let (rpc, bundler, customBundler) ← endpoints options chain
   let (worker, provingRoot) ← runtimePaths options
   let metadata ← if batch then ProverWorkerClient.inspectBatchPrototype worker noteFile chainId
@@ -402,14 +413,20 @@ private def help (batch : Bool) : String :=
   "--non-interactive still prints the review and runs all checks; batch mode requires --owner-key-file.\n" ++
   "Options: --chain, --rpc, --bundler-url, --status-dir, --assets-dir, --history-cache-dir, --proving-assets-root.\n" ++
   "Batch options: --recipient/--receiver, --contract-calls, --simulation-rpc, --simulation-policy required|best-effort, --execution-gas-retry. --note-file aliases --notes-file.\n" ++
+  "Batch encrypted owner key files use hidden password entry; --pwd-file <path> is required in non-interactive mode.\n" ++
   "The known zero-execution bundler estimation issue is handled automatically for direct one-note withdrawals using bounded conservative gas.\n" ++
   "Other estimation/simulation outages remain blocked by default; best-effort allows only narrowly classified unavailability. Batches still require successful gas estimation.\n" ++
   "Batch signed-simulation unavailability still requires a successful dummy estimate; explicit validation failures always block.\n"
 
 def command (batch : Bool) (args : List String) : IO (String × UInt32) := do
-  if args.contains "--help" || args.contains "-h" then return (help batch, 0)
-  if !args.contains "--broadcast" then
-    if !args.contains "--dry-run" && (batch || !args.contains "--preflight") then
+  let controls := NativeSigner.withoutPasswordArguments args
+  if controls.any (fun item => item == "--pwd" || item.startsWith "--pwd=") then
+    fail "--pwd is not supported. Use --pwd-file or hidden password entry."
+  if controls.contains "--help" || controls.contains "-h" then return (help batch, 0)
+  if !batch && args.any (fun item => item == "--pwd-file" || item.startsWith "--pwd-file=") then
+    fail "Password options require --owner-key-file in batch withdrawals."
+  if !controls.contains "--broadcast" then
+    if !controls.contains "--dry-run" && (batch || !controls.contains "--preflight") then
       fail (if batch then "Choose --dry-run or --broadcast."
         else "Choose --dry-run, --preflight or --broadcast.")
     return (← if batch then WithdrawBatch.withdrawBatchCommand args
@@ -418,7 +435,7 @@ def command (batch : Bool) (args : List String) : IO (String × UInt32) := do
   if batch && (options.route != "4337" || options.noteIndex.isSome) then
     fail "Batch withdrawals require the complete selected backup and the 4337 route."
   if !batch && options.route == "relayer" then
-    if options.keyFile.isSome || options.callsFile.isSome || options.simulationRpc.isSome ||
+    if options.keyFile.isSome || options.passwords.hasSource || options.callsFile.isSome || options.simulationRpc.isSome ||
         options.executionGasRetry then
       fail "Owner keys, contract calls and execution simulation options require the batch 4337 route."
     let some noteFile := options.file | fail "Provide --note-file."

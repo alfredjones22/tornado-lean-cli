@@ -25,11 +25,28 @@ constant-time secret-key operations; this is not a theorem about the complete
 wrapper/compiler/hardware combination. Clearing is best effort and does not
 guarantee erasure of every copy or behavior after abrupt termination.
 
-Raw key files are limited to 1,024 bytes and must satisfy owner, mode,
-single-link, no-symlink, stability and platform ACL checks. The accepted
-format is a raw `0x`-prefixed 32-byte hexadecimal key, not an encrypted JSON keystore.
+Raw key files are limited to 1,024 bytes; encrypted Web3 Secret Storage v3
+JSON files have a separate bounded loader. Both satisfy owner, mode,
+single-link, no-symlink, stability and platform ACL checks. Raw keys use a
+`0x`-prefixed 32-byte hexadecimal value.
 Native diagnostics identify fixed failure categories without returning key
 bytes, file content, digest, filename or OS error numbers.
+
+Encrypted account files are parsed and decrypted inside the native boundary.
+OpenSSL libcrypto supplies PBKDF2, AES-128-CTR and Ethereum Keccak-256;
+libsodium supplies scrypt, including historical Geth parameter combinations.
+The MAC is checked before plaintext is admitted, the secp256k1 scalar is
+validated and any stored account address must agree. The unlocked key stays in
+a locked command-local native session, and protected source-file checks guard
+later signing against changed content or metadata. No decrypted key is returned
+to Lean or written to disk; the original path still anchors reservations.
+
+Hidden passwords and protected password-file contents stay native; Lean
+receives only the file path and public policy flags. KDF workspaces and the
+OpenSSL/libsodium internals are additional trusted memory outside the locked
+key page; their clearing and the OS remain best
+effort. Format/authentication tests do not prove constant-time whole-command
+behavior or secure erasure. See [Usage](USAGE.md#encrypted-account-keystores).
 
 Hidden entry reads `/dev/tty` with echo disabled, parses the key in C and
 keeps it in the locked command-local session. It creates no key file and does

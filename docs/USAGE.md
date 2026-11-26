@@ -1,6 +1,8 @@
 # Using the Tornado CLI
 
-Build both executables from the repository root:
+The native build needs `pkg-config`, OpenSSL libcrypto 3.2+ and libsodium
+1.0.18+. See [Verification prerequisites](VERIFICATION.md) for installation and
+custom library prefixes. Build both executables from the repository root:
 
 ```sh
 lake build tornado tornado_prover_worker
@@ -28,12 +30,56 @@ permissions, symlinks, multiple hard links and access-granting macOS ACLs.
 Paths may be absolute or relative, but `..` components are rejected.
 
 For deposits use `--key-file`; for batch withdrawals or recovery use
-`--owner-key-file`. The file contains one raw, `0x`-prefixed 32-byte
-private key in hexadecimal, not an encrypted JSON keystore. Use `chmod 600`
-and remove access-granting ACLs. Omitting the file option opens a hidden
-terminal prompt. Keys are handled inside the native signer boundary; note
+`--owner-key-file`. The file can contain a raw, `0x`-prefixed 32-byte private
+key or an Ethereum Web3 Secret Storage v3 encrypted account keystore. Both
+formats require `chmod 600` and no access-granting ACLs. Omitting the file
+option opens a hidden raw-key terminal prompt. Keys are handled inside the native signer boundary; note
 secrets and the isolated prover retain the limitations in
 [trust boundaries](TRUST_BOUNDARIES.md).
+
+### Encrypted account keystores
+
+Key-file commands automatically recognize standard v3 JSON keystores used by
+Foundry/cast, geth and ethers. Supported encryption is AES-128-CTR with either
+scrypt or PBKDF2-HMAC-SHA256 and the Ethereum Keccak-256 MAC. The loader accepts
+`crypto` or `Crypto`, verifies the MAC before decryption, and checks any stored
+address against the decrypted key. Legacy/presale and validator keystores are
+different formats and are not accepted.
+
+An encrypted file prompts once for its password with terminal echo disabled.
+Use `--pwd-file <private-password-file>` or `--pwd-file=<path>` to read it from
+a protected file instead. The option requires an encrypted key file and
+applies to deposits, invoice payment, deposit resume, batch withdrawals and
+smart-account recovery, including their review/dry-run modes.
+
+With `--non-interactive`, an encrypted file requires `--pwd-file`;
+otherwise the command errors before network preparation, reservations or
+signing. A raw key file needs no password. One-note withdrawals derive their
+own signer from the note and do not accept account-key password options.
+
+```sh
+lake exe tornado deposit send --notes-file ./notes.txt --key-file ./keystore.json --chain 1 --dry-run
+lake exe tornado deposit send --notes-file ./notes.txt --key-file ./keystore.json --pwd-file ./password.txt --chain 1 --non-interactive --dry-run
+lake exe tornado withdraw batch --notes-file ./notes.txt --owner-key-file ./keystore.json --pwd-file ./password.txt --chain 1 --non-interactive --dry-run
+```
+
+Passwords are read only through hidden entry or a protected file, not command
+arguments. Password files use the same protected-file policy and must be mode
+`0600`. Their contents are exact UTF-8 bytes, preserving spaces; one final LF
+or CRLF is removed. No Unicode normalization is performed: supply the same
+password bytes used to create the keystore. For ethers-created string-password
+keystores, this can mean supplying NFKC-normalized bytes.
+An empty supplied password is distinct from no password. Password size and
+KDF work are bounded; an excessive keystore is rejected without weakening its
+parameters. The JSON limit is 64 KiB, password limit 1,024 UTF-8 bytes, and
+derived-key size 32–1,024 bytes. PBKDF2 admits at most 10 million iterations;
+scrypt admits at most 512 MiB estimated workspace and `N*r*p <= 2^25`, with
+power-of-two `N <= 2^20` and positive `r,p <= 1,024`. Canonical ASCII JSON field
+names are required. No plaintext key file is written. The command retains the original
+keystore path for reservations and rechecks the protected source before each
+use of its native unlocked session.
+
+### Review and broadcasting
 
 Run `--dry-run` first, then issue a separate command with `--broadcast`.
 Sending defaults to typed `SEND`, `WITHDRAW` or `RECOVER` approval; new or

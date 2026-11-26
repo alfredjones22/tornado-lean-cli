@@ -55,6 +55,10 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--retry-rejected" :: rest => parseOptions rest { options with retryRejected := true }
   | "--yes" :: rest => parseOptions rest { options with yes := true }
   | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
+  | "--pwd" :: _ =>
+    .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: _ =>
+    .error "Password options require --owner-key-file in batch withdrawals."
   | "--note-file" :: value :: rest => parseOptions rest { options with noteFile := some value }
   | "--recipient" :: value :: rest => parseOptions rest { options with recipient := some value }
   | "--note-index" :: value :: rest => parseOptions rest { options with noteIndex := some value }
@@ -69,7 +73,11 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
     ["--route"] | ["--rpc"] | ["--bundler-url"] | ["--assets-dir"] |
     ["--status-dir"] | ["--history-cache-dir"] => .error "Withdrawal option is missing its value."
   | argument :: rest =>
-    if argument.startsWith "--note-file=" then
+    if argument.startsWith "--pwd=" then
+      .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+    else if argument.startsWith "--pwd-file=" then
+      .error "Password options require --owner-key-file in batch withdrawals."
+    else if argument.startsWith "--note-file=" then
       parseOptions rest { options with noteFile := some (String.ofList (argument.toList.drop 12)) }
     else if argument.startsWith "--recipient=" then
       parseOptions rest { options with recipient := some (String.ofList (argument.toList.drop 12)) }

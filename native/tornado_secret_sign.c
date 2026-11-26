@@ -15,6 +15,7 @@
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include "tornado_private_io.h"
+#include "tornado_keystore.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -65,6 +66,16 @@ static const char *failure_message(tornado_key_status status) {
     case TORNADO_KEY_FILE_UNSTABLE: return "Protected key file changed while it was being read.";
     case TORNADO_KEY_FILE_CLOSE: return "Protected key file could not be closed.";
     case TORNADO_KEY_FILE_FORMAT: return "Protected key file must contain one 0x-prefixed 32-byte hex key. Use a raw key file, not an encrypted JSON keystore.";
+    case TORNADO_KEY_KEYSTORE_SIZE: return "Encrypted key file exceeds the 64 KiB limit.";
+    case TORNADO_KEY_KEYSTORE_FORMAT: return "Malformed encrypted keystore. Use a Web3 Secret Storage v3 account file.";
+    case TORNADO_KEY_KEYSTORE_UNSUPPORTED: return "Unsupported keystore format or algorithm. Use v3 with AES-128-CTR and scrypt or PBKDF2-HMAC-SHA256.";
+    case TORNADO_KEY_KEYSTORE_BUDGET: return "Keystore KDF parameters exceed the supported resource limits; parameters were not weakened.";
+    case TORNADO_KEY_KEYSTORE_PASSWORD: return "Could not decrypt keystore: incorrect password or corrupted file.";
+    case TORNADO_KEY_KEYSTORE_CRYPTO: return "Native keystore decryption failed. Check libsodium/OpenSSL availability and the keystore KDF parameters.";
+    case TORNADO_KEY_KEYSTORE_ADDRESS: return "Decrypted key does not match the keystore address.";
+    case TORNADO_KEY_KEYSTORE_CHANGED: return "Encrypted key file changed after unlocking. Stop and review the original attempt before restarting.";
+    case TORNADO_KEY_PASSWORD_FILE: return "Could not read password file. Check its path, ownership, chmod 600, ACLs and 1024-byte limit.";
+    case TORNADO_KEY_PASSWORD_FORMAT: return "Password must be at most 1024 UTF-8 bytes without embedded NUL or line breaks.";
     case TORNADO_KEY_INVALID_SCALAR: return "Protected key is not a valid secp256k1 scalar.";
     case TORNADO_KEY_CORE_GET: return "Protected signer could not inspect core-dump limits.";
     case TORNADO_KEY_CORE_SET: return "Protected signer could not disable core dumps.";
@@ -91,7 +102,7 @@ static lean_obj_res fixed_failure(tornado_key_status status) {
 
 /* A failure to disable core dumps, pin the page, or exclude it from dumps
  * where supported prevents private-key import. */
-static uint8_t *secret_region_create(tornado_key_status *status) {
+static uint8_t *secret_buffer_create(size_t length, tornado_key_status *status) {
     struct rlimit core;
     if (getrlimit(RLIMIT_CORE, &core) != 0) {
         *status = TORNADO_KEY_CORE_GET; return NULL;
@@ -106,42 +117,50 @@ static uint8_t *secret_region_create(tornado_key_status *status) {
 #else
     const int anon = MAP_ANONYMOUS;
 #endif
-    void *page = mmap(NULL, TORNADO_SECRET_REGION_BYTES,
+    void *page = mmap(NULL, length,
         PROT_READ | PROT_WRITE, MAP_PRIVATE | anon, -1, 0);
     if (page == MAP_FAILED) {
         *status = TORNADO_KEY_MEMORY_MAP; return NULL;
     }
-    if (mlock(page, TORNADO_SECRET_REGION_BYTES) != 0) {
+    if (mlock(page, length) != 0) {
         *status = TORNADO_KEY_MEMORY_LOCK;
-        clear_bytes(page, TORNADO_SECRET_REGION_BYTES);
-        munmap(page, TORNADO_SECRET_REGION_BYTES);
+        clear_bytes(page, length);
+        munmap(page, length);
         return NULL;
     }
 #if defined(MADV_DONTDUMP)
-    if (madvise(page, TORNADO_SECRET_REGION_BYTES, MADV_DONTDUMP) != 0) {
+    if (madvise(page, length, MADV_DONTDUMP) != 0) {
         *status = TORNADO_KEY_MEMORY_NODUMP;
-        clear_bytes(page, TORNADO_SECRET_REGION_BYTES);
-        munlock(page, TORNADO_SECRET_REGION_BYTES);
-        munmap(page, TORNADO_SECRET_REGION_BYTES);
+        clear_bytes(page, length);
+        munlock(page, length);
+        munmap(page, length);
         return NULL;
     }
 #elif defined(MADV_NOCORE)
-    if (madvise(page, TORNADO_SECRET_REGION_BYTES, MADV_NOCORE) != 0) {
+    if (madvise(page, length, MADV_NOCORE) != 0) {
         *status = TORNADO_KEY_MEMORY_NODUMP;
-        clear_bytes(page, TORNADO_SECRET_REGION_BYTES);
-        munlock(page, TORNADO_SECRET_REGION_BYTES);
-        munmap(page, TORNADO_SECRET_REGION_BYTES);
+        clear_bytes(page, length);
+        munlock(page, length);
+        munmap(page, length);
         return NULL;
     }
 #endif
     return (uint8_t *)page;
 }
 
-static void secret_region_destroy(uint8_t *page) {
+static uint8_t *secret_region_create(tornado_key_status *status) {
+    return secret_buffer_create(TORNADO_SECRET_REGION_BYTES, status);
+}
+
+static void secret_buffer_destroy(uint8_t *page, size_t length) {
     if (page == NULL) return;
-    clear_bytes(page, TORNADO_SECRET_REGION_BYTES);
-    (void)munlock(page, TORNADO_SECRET_REGION_BYTES);
-    (void)munmap(page, TORNADO_SECRET_REGION_BYTES);
+    clear_bytes(page, length);
+    (void)munlock(page, length);
+    (void)munmap(page, length);
+}
+
+static void secret_region_destroy(uint8_t *page) {
+    secret_buffer_destroy(page, TORNADO_SECRET_REGION_BYTES);
 }
 
 static int kernel_random32(uint8_t seed[32]) {
@@ -162,12 +181,20 @@ static int kernel_random32(uint8_t seed[32]) {
 static uint8_t *interactive_region = NULL;
 static char interactive_alias[PATH_MAX];
 static int interactive_exit_registered = 0;
+static int encrypted_session = 0;
+static uint8_t encrypted_fingerprint[32];
+static tornado_key_file_stamp encrypted_stamp;
+static size_t encrypted_size = 0;
 static volatile sig_atomic_t prompt_signal = 0;
 
 static void interactive_clear(void) {
     secret_region_destroy(interactive_region);
     interactive_region = NULL;
     clear_bytes(interactive_alias, sizeof(interactive_alias));
+    clear_bytes(encrypted_fingerprint, sizeof(encrypted_fingerprint));
+    clear_bytes(&encrypted_stamp, sizeof(encrypted_stamp));
+    encrypted_session = 0;
+    encrypted_size = 0;
 }
 
 static void prompt_interrupted(int signal_number) {
@@ -176,6 +203,106 @@ static void prompt_interrupted(int signal_number) {
 
 static lean_obj_res terminal_failure(const char *message) {
     return lean_io_result_mk_error(lean_mk_io_user_error(lean_mk_string(message)));
+}
+
+/* One bounded, no-echo terminal reader for keys and passwords. The caller's
+ * destination is locked. No terminal bytes are copied to Lean or disk. */
+static const char *hidden_input(uint8_t *raw, size_t capacity, size_t *used,
+    int password) {
+    int tty = open("/dev/tty", O_RDWR | O_NOCTTY | O_CLOEXEC);
+    struct termios before, hidden;
+    struct sigaction old_actions[4], action;
+    const int signals[4] = { SIGINT, SIGTERM, SIGHUP, SIGQUIT };
+    int installed = 0, changed = 0, ok = 0;
+    const char *error = password ? "Could not read the keystore password from the controlling terminal."
+        : "Could not read the private key from the controlling terminal.";
+    *used = 0;
+    prompt_signal = 0;
+    if (tty < 0 || tty >= FD_SETSIZE || !isatty(tty) || tcgetattr(tty, &before) != 0) {
+        error = password ? "No interactive terminal is available. Supply --pwd-file."
+            : "No interactive terminal is available. Supply --key-file or --owner-key-file.";
+        goto prompt_done;
+    }
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = prompt_interrupted;
+    sigemptyset(&action.sa_mask);
+    for (; installed < 4; installed++)
+        if (sigaction(signals[installed], &action, &old_actions[installed]) != 0)
+            goto prompt_done;
+    hidden = before;
+    hidden.c_lflag &= (tcflag_t)~(ECHO | ECHONL | ICANON);
+    hidden.c_cc[VMIN] = 1;
+    hidden.c_cc[VTIME] = 0;
+    if (tcsetattr(tty, TCSANOW, &hidden) != 0) goto prompt_done;
+    changed = 1;
+    const char *prompt = password ? "Keystore password (hidden): "
+        : "Private key (hidden; 0x followed by 64 hex characters): ";
+    if (write(tty, prompt, strlen(prompt)) != (ssize_t)strlen(prompt)) goto prompt_done;
+    while (*used <= capacity) {
+        if (prompt_signal != 0) goto prompt_done;
+        fd_set ready;
+        FD_ZERO(&ready);
+        FD_SET(tty, &ready);
+        struct timeval interval = { 0, 100000 };
+        int available = select(tty + 1, &ready, NULL, NULL, &interval);
+        if (available < 0 && errno == EINTR) continue;
+        if (available < 0) goto prompt_done;
+        if (available == 0) continue;
+        ssize_t count = read(tty, raw + *used, 1);
+        if (count < 0 && errno == EINTR && prompt_signal == 0) continue;
+        if (count <= 0 || prompt_signal != 0) goto prompt_done;
+        if (raw[*used] == '\n' || raw[*used] == '\r') { ok = 1; break; }
+        if (raw[*used] == 4) {
+            error = password ? "Keystore password entry was cancelled." : "Private key entry was cancelled.";
+            goto prompt_done;
+        }
+        if (raw[*used] == 8 || raw[*used] == 127) {
+            raw[*used] = 0;
+            size_t old = *used;
+            if (*used > 0) {
+                do { --*used; } while (*used > 0 && (raw[*used] & 0xc0u) == 0x80u);
+                clear_bytes(raw + *used, old - *used);
+            }
+            continue;
+        }
+        if (raw[*used] == 21) {
+            clear_bytes(raw, *used + 1);
+            *used = 0;
+            continue;
+        }
+        if (*used == capacity) break;
+        (*used)++;
+    }
+    if (!ok) error = password ? "Keystore password input is too long or was cancelled."
+        : "Private key input is too long or was cancelled.";
+prompt_done:
+    if (changed) {
+        int flushed, restored;
+        do { flushed = tcflush(tty, TCIFLUSH); } while (flushed != 0 && errno == EINTR);
+        do { restored = tcsetattr(tty, TCSANOW, &before); } while (restored != 0 && errno == EINTR);
+        if (flushed != 0 || restored != 0) {
+            ok = 0; error = password ? "Could not restore terminal settings after password entry."
+                : "Could not restore terminal settings after private key entry.";
+        }
+        (void)write(tty, "\n", 1);
+    }
+    for (int index = installed - 1; index >= 0; index--)
+        if (sigaction(signals[index], &old_actions[index], NULL) != 0) {
+            ok = 0; error = password ? "Could not restore interrupt handlers after password entry."
+                : "Could not restore interrupt handlers after private key entry.";
+        }
+    if (tty >= 0 && close(tty) != 0) ok = 0;
+    if (prompt_signal != 0) {
+        ok = 0; error = password ? "Keystore password entry was interrupted." : "Private key entry was interrupted.";
+    }
+    return ok ? NULL : error;
+}
+
+static int register_key_cleanup(void) {
+    if (interactive_exit_registered) return 1;
+    if (atexit(interactive_clear) != 0) return 0;
+    interactive_exit_registered = 1;
+    return 1;
 }
 
 LEAN_EXPORT lean_obj_res tornado_secure_prompt_key(b_lean_obj_arg anchor,
@@ -195,84 +322,15 @@ LEAN_EXPORT lean_obj_res tornado_secure_prompt_key(b_lean_obj_arg anchor,
     uint8_t *raw = region + TORNADO_SECRET_RAW_OFFSET;
     uint8_t *key = region + TORNADO_SECRET_KEY_OFFSET;
     uint8_t *seed = region + TORNADO_SECRET_SEED_OFFSET;
-    int tty = open("/dev/tty", O_RDWR | O_NOCTTY | O_CLOEXEC);
-    struct termios before, hidden;
-    struct sigaction old_actions[4], action;
-    const int signals[4] = { SIGINT, SIGTERM, SIGHUP, SIGQUIT };
-    int installed = 0, changed = 0, ok = 0;
-    size_t used = 0;
-    const char *error = "Could not read the private key from the controlling terminal.";
-    prompt_signal = 0;
-    if (tty < 0 || tty >= FD_SETSIZE || !isatty(tty) || tcgetattr(tty, &before) != 0) {
-        error = "No interactive terminal is available. Supply --key-file or --owner-key-file.";
-        goto prompt_done;
-    }
-    memset(&action, 0, sizeof(action));
-    action.sa_handler = prompt_interrupted;
-    sigemptyset(&action.sa_mask);
-    for (; installed < 4; installed++)
-        if (sigaction(signals[installed], &action, &old_actions[installed]) != 0)
-            goto prompt_done;
-    hidden = before;
-    hidden.c_lflag &= (tcflag_t)~(ECHO | ECHONL | ICANON);
-    hidden.c_cc[VMIN] = 1;
-    hidden.c_cc[VTIME] = 0;
-    if (tcsetattr(tty, TCSANOW, &hidden) != 0) goto prompt_done;
-    changed = 1;
-    const char *prompt = "Private key (hidden; 0x followed by 64 hex characters): ";
-    if (write(tty, prompt, strlen(prompt)) != (ssize_t)strlen(prompt)) goto prompt_done;
-    while (used < TORNADO_MAX_HEX_KEY_FILE) {
-        if (prompt_signal != 0) goto prompt_done;
-        fd_set ready;
-        FD_ZERO(&ready);
-        FD_SET(tty, &ready);
-        struct timeval interval = { 0, 100000 };
-        int available = select(tty + 1, &ready, NULL, NULL, &interval);
-        if (available < 0 && errno == EINTR) continue;
-        if (available < 0) goto prompt_done;
-        if (available == 0) continue;
-        ssize_t count = read(tty, raw + used, 1);
-        if (count < 0 && errno == EINTR && prompt_signal == 0) continue;
-        if (count <= 0 || prompt_signal != 0) goto prompt_done;
-        if (raw[used] == '\n' || raw[used] == '\r') { ok = 1; break; }
-        if (raw[used] == 4) { error = "Private key entry was cancelled."; goto prompt_done; }
-        if (raw[used] == 8 || raw[used] == 127) {
-            raw[used] = 0;
-            if (used > 0) raw[--used] = 0;
-            continue;
-        }
-        if (raw[used] == 21) {
-            clear_bytes(raw, used + 1);
-            used = 0;
-            continue;
-        }
-        used++;
-    }
-    if (!ok) error = "Private key input is too long or was cancelled.";
-prompt_done:
-    if (changed) {
-        /* Discard pasted typeahead so it cannot approve a later SEND prompt. */
-        int flushed, restored;
-        do { flushed = tcflush(tty, TCIFLUSH); } while (flushed != 0 && errno == EINTR);
-        do { restored = tcsetattr(tty, TCSANOW, &before); } while (restored != 0 && errno == EINTR);
-        if (flushed != 0 || restored != 0) {
-            ok = 0; error = "Could not restore terminal settings after private key entry.";
-        }
-        (void)write(tty, "\n", 1);
-    }
-    for (int index = installed - 1; index >= 0; index--)
-        if (sigaction(signals[index], &old_actions[index], NULL) != 0) {
-            ok = 0; error = "Could not restore interrupt handlers after private key entry.";
-        }
-    if (tty >= 0 && close(tty) != 0) ok = 0;
-    if (prompt_signal != 0) { ok = 0; error = "Private key entry was interrupted."; }
-    if (!ok) { secret_region_destroy(region); return terminal_failure(error); }
+    size_t used;
+    const char *error = hidden_input(raw, TORNADO_MAX_HEX_KEY_FILE, &used, 0);
+    if (error != NULL) { secret_region_destroy(region); return terminal_failure(error); }
     if (!tornado_private_parse_secp256k1_key(raw, used, key) ||
         !secp256k1_ec_seckey_verify(secp256k1_context_static, key)) {
         secret_region_destroy(region);
         return terminal_failure("Enter one valid Ethereum private key: 0x followed by 64 hex characters.");
     }
-    clear_bytes(raw, TORNADO_MAX_HEX_KEY_FILE);
+    clear_bytes(raw, TORNADO_MAX_HEX_KEY_FILE + 1);
     if (!kernel_random32(seed)) {
         secret_region_destroy(region); return fixed_failure(TORNADO_KEY_ENTROPY);
     }
@@ -284,12 +342,11 @@ prompt_done:
     }
     interactive_alias[base_length + 64] = '\0';
     clear_bytes(seed, 32);
-    if (!interactive_exit_registered && atexit(interactive_clear) != 0) {
+    if (!register_key_cleanup()) {
         secret_region_destroy(region);
         clear_bytes(interactive_alias, sizeof(interactive_alias));
         return terminal_failure("Could not register interactive signer cleanup.");
     }
-    interactive_exit_registered = 1;
     interactive_region = region;
     return lean_io_result_mk_ok(lean_mk_string(interactive_alias));
 }
@@ -298,6 +355,184 @@ LEAN_EXPORT lean_obj_res tornado_secure_clear_prompt_key(lean_obj_arg world) {
     (void)world;
     interactive_clear();
     return lean_io_result_mk_ok(lean_box(0));
+}
+
+/* The size-only probe chooses a bounded allocation; the subsequent independent
+ * protected read rechecks its opened inode before/after reading. A race that
+ * grows the file beyond the allocation fails rather than reallocating. */
+static uint8_t *read_key_source(b_lean_obj_arg path, size_t *allocated,
+    size_t *size, tornado_key_file_stamp *stamp, tornado_key_status *status) {
+    size_t expected;
+    *allocated = 0;
+    *size = 0;
+    if (!tornado_private_key_material_size(path, TORNADO_MAX_KEYSTORE_FILE, &expected, status)) {
+        if (*status == TORNADO_KEY_FILE_SIZE) *status = TORNADO_KEY_KEYSTORE_SIZE;
+        return NULL;
+    }
+    size_t amount = expected == 0 ? 4096 : ((expected + 4095) / 4096) * 4096;
+    uint8_t *bytes = secret_buffer_create(amount, status);
+    if (bytes == NULL) return NULL;
+    if (!tornado_private_read_key_material(path, bytes, amount, size, status, stamp)) {
+        if (*status == TORNADO_KEY_FILE_SIZE) *status = TORNADO_KEY_FILE_UNSTABLE;
+        secret_buffer_destroy(bytes, amount);
+        return NULL;
+    }
+    *allocated = amount;
+    return bytes;
+}
+
+static int cached_source_matches(b_lean_obj_arg path, tornado_key_status *status) {
+    size_t allocated, size;
+    tornado_key_file_stamp stamp;
+    uint8_t fingerprint[32];
+    uint8_t *bytes = read_key_source(path, &allocated, &size, &stamp, status);
+    if (bytes == NULL) return 0;
+    int ok = tornado_keystore_fingerprint(bytes, size, fingerprint);
+    if (!ok) *status = TORNADO_KEY_KEYSTORE_CRYPTO;
+    else if (size != encrypted_size || memcmp(&stamp, &encrypted_stamp, sizeof(stamp)) != 0 ||
+             memcmp(fingerprint, encrypted_fingerprint, sizeof(fingerprint)) != 0) {
+        *status = TORNADO_KEY_KEYSTORE_CHANGED;
+        ok = 0;
+    }
+    clear_bytes(fingerprint, sizeof(fingerprint));
+    clear_bytes(&stamp, sizeof(stamp));
+    secret_buffer_destroy(bytes, allocated);
+    return ok;
+}
+
+static int unlocked_key_valid(uint8_t *region, const tornado_keystore *store,
+    tornado_key_status *status) {
+    const uint8_t *key = region + TORNADO_SECRET_KEY_OFFSET;
+    if (!secp256k1_ec_seckey_verify(secp256k1_context_static, key)) {
+        *status = TORNADO_KEY_INVALID_SCALAR; return 0;
+    }
+    if (!store->has_address) return 1;
+    uint8_t *seed = region + TORNADO_SECRET_SEED_OFFSET;
+    if (!kernel_random32(seed)) { *status = TORNADO_KEY_ENTROPY; return 0; }
+    secp256k1_context *context = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (context == NULL) { *status = TORNADO_KEY_CONTEXT_CREATE; clear_bytes(seed, 32); return 0; }
+    int ok = 0;
+    secp256k1_pubkey public_key;
+    uint8_t serialized[65], digest[32];
+    size_t length = sizeof(serialized);
+    *status = TORNADO_KEY_CONTEXT_RANDOMIZE;
+    if (!secp256k1_context_randomize(context, seed)) goto done;
+    *status = TORNADO_KEY_PUBLIC_KEY;
+    if (!secp256k1_ec_pubkey_create(context, &public_key, key) ||
+        !secp256k1_ec_pubkey_serialize(context, serialized, &length, &public_key,
+            SECP256K1_EC_UNCOMPRESSED) || length != 65) goto done;
+    *status = TORNADO_KEY_KEYSTORE_CRYPTO;
+    if (!tornado_keystore_keccak(serialized + 1, 64, digest)) goto done;
+    *status = TORNADO_KEY_KEYSTORE_ADDRESS;
+    if (memcmp(digest + 12, store->address, 20) != 0) goto done;
+    *status = TORNADO_KEY_OK;
+    ok = 1;
+done:
+    clear_bytes(seed, 32);
+    clear_bytes(&public_key, sizeof(public_key));
+    clear_bytes(serialized, sizeof(serialized));
+    clear_bytes(digest, sizeof(digest));
+    secp256k1_context_destroy(context);
+    return ok;
+}
+
+/* Public arguments select only a source and mode. Password bytes come from a
+ * protected native file read or hidden terminal, never from Lean values.
+ * mode bit2 = password file supplied; bit4 = prohibit interactive prompting. */
+LEAN_EXPORT lean_obj_res tornado_secure_unlock_key_file(b_lean_obj_arg path,
+    b_lean_obj_arg password_file, uint32_t mode, lean_obj_arg world) {
+    (void)world;
+    if ((mode & ~6u) != 0 || (!(mode & 2u) && lean_string_size(password_file) != 1))
+        return terminal_failure("Invalid keystore password options. Use --pwd-file or the hidden password prompt.");
+    if (interactive_region != NULL)
+        return terminal_failure("A key is already unlocked for this command.");
+    const char *source = lean_string_cstr(path);
+    size_t source_length = lean_string_size(path);
+    if (source_length < 2 || source_length > sizeof(interactive_alias) ||
+        strlen(source) != source_length - 1)
+        return fixed_failure(TORNADO_KEY_PATH_INVALID);
+    tornado_key_status status = TORNADO_KEY_UNKNOWN;
+    size_t allocated = 0, size = 0;
+    tornado_key_file_stamp stamp;
+    uint8_t *bytes = read_key_source(path, &allocated, &size, &stamp, &status);
+    if (bytes == NULL) return fixed_failure(status);
+    uint8_t *region = secret_region_create(&status);
+    if (region == NULL) {
+        secret_buffer_destroy(bytes, allocated); return fixed_failure(status);
+    }
+    uint8_t *key = region + TORNADO_SECRET_KEY_OFFSET;
+    uint8_t *password = region + 2048;
+    uint8_t *work = region + TORNADO_SECRET_RAW_OFFSET;
+    size_t password_size = 0, first = 0;
+    const char *message = NULL;
+    int ok = 0, encrypted = 0;
+    tornado_keystore store;
+    memset(&store, 0, sizeof(store));
+    while (first < size && (bytes[first] == ' ' || bytes[first] == '\t' ||
+        bytes[first] == '\r' || bytes[first] == '\n')) first++;
+    if (first == size || bytes[first] != '{') {
+        status = size > TORNADO_MAX_HEX_KEY_FILE ? TORNADO_KEY_FILE_SIZE : TORNADO_KEY_FILE_FORMAT;
+        if (size > TORNADO_MAX_HEX_KEY_FILE ||
+            !tornado_private_parse_secp256k1_key(bytes, size, key)) goto done;
+        if (mode & 2u) {
+            message = "--pwd-file requires an encrypted keystore, not a raw private-key file.";
+            goto done;
+        }
+        if (!secp256k1_ec_seckey_verify(secp256k1_context_static, key)) {
+            status = TORNADO_KEY_INVALID_SCALAR; goto done;
+        }
+        ok = 1;
+        goto done;
+    }
+    if (!tornado_keystore_parse(bytes, size, &store, &status)) goto done;
+    if (mode & 2u) {
+        if (!tornado_private_read_key_material(password_file, password,
+                TORNADO_MAX_PASSWORD + 2, &password_size, &status, NULL)) {
+            status = TORNADO_KEY_PASSWORD_FILE; goto done;
+        }
+        if (password_size > 0 && password[password_size - 1] == '\n') {
+            password_size--;
+            if (password_size > 0 && password[password_size - 1] == '\r') password_size--;
+        }
+        if (!tornado_password_valid(password, password_size)) {
+            status = TORNADO_KEY_PASSWORD_FORMAT; goto done;
+        }
+    } else {
+        if (mode & 4u) {
+            message = "Encrypted key file requires --pwd-file in --non-interactive mode.";
+            goto done;
+        }
+        message = hidden_input(password, TORNADO_MAX_PASSWORD, &password_size, 1);
+        if (message != NULL) goto done;
+    }
+    if (!tornado_keystore_decrypt(&store, password, password_size, key, work, &status) ||
+        !unlocked_key_valid(region, &store, &status)) goto done;
+    if (!tornado_keystore_fingerprint(bytes, size, encrypted_fingerprint)) {
+        status = TORNADO_KEY_KEYSTORE_CRYPTO; goto done;
+    }
+    if (!register_key_cleanup()) {
+        message = "Could not register keystore signer cleanup."; goto done;
+    }
+    clear_bytes(password, TORNADO_MAX_PASSWORD + 2);
+    clear_bytes(work, TORNADO_KEYSTORE_WORK_BYTES);
+    memcpy(interactive_alias, source, source_length);
+    encrypted_stamp = stamp;
+    encrypted_size = size;
+    encrypted_session = 1;
+    interactive_region = region;
+    region = NULL;
+    encrypted = 1;
+    ok = 1;
+done:
+    secret_region_destroy(region);
+    secret_buffer_destroy(bytes, allocated);
+    clear_bytes(&stamp, sizeof(stamp));
+    clear_bytes(&store, sizeof(store));
+    if (!ok) {
+        if (!encrypted) clear_bytes(encrypted_fingerprint, sizeof(encrypted_fingerprint));
+        return message != NULL ? terminal_failure(message) : fixed_failure(status);
+    }
+    return lean_io_result_mk_ok(lean_mk_string(source));
 }
 
 /* output is 65 bytes for address derivation and 130 bytes for signing:
@@ -319,6 +554,7 @@ static int with_private_key(b_lean_obj_arg path, const uint8_t *digest32,
     uint8_t *raw = region + TORNADO_SECRET_RAW_OFFSET;
     if (interactive_region != NULL &&
         strcmp(lean_string_cstr(path), interactive_alias) == 0) {
+        if (encrypted_session && !cached_source_matches(path, status)) goto done;
         memcpy(key, interactive_region + TORNADO_SECRET_KEY_OFFSET, 32);
     } else if (!tornado_private_read_secp256k1_key(path, key, raw, status)) goto done;
     if (!kernel_random32(seed)) { *status = TORNADO_KEY_ENTROPY; goto done; }

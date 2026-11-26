@@ -182,6 +182,7 @@ private def depositJournalPath (requested : Option String) (chain : ChainId) : I
 private structure InvoiceOptions where
   invoiceFile : Option String := none
   keyFile : Option String := none
+  passwords : Tornado.Runtime.NativeSigner.PasswordOptions := {}
   journal : Option String := none
   chain : String := "1"
   rpc : Option String := none
@@ -200,6 +201,10 @@ private partial def parseInvoiceOptions (args : List String)
       parseInvoiceOptions rest { options with invoiceFile := some value }
   | "--key-file" :: value :: rest =>
       parseInvoiceOptions rest { options with keyFile := some value }
+  | "--pwd" :: _ => .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: value :: rest => do
+      let passwords ← options.passwords.withPasswordFile value
+      parseInvoiceOptions rest { options with passwords }
   | "--journal" :: value :: rest =>
       parseInvoiceOptions rest { options with journal := some value }
   | "--chain" :: value :: rest =>
@@ -211,11 +216,16 @@ private partial def parseInvoiceOptions (args : List String)
       parseInvoiceOptions rest { options with experimentalSend := true }
   | "--non-interactive" :: rest =>
       parseInvoiceOptions rest { options with nonInteractive := true }
-  | ["--invoice-file"] | ["--key-file"] | ["--journal"] |
+  | ["--invoice-file"] | ["--key-file"] | ["--pwd-file"] | ["--journal"] |
       ["--chain"] | ["--rpc"] =>
       .error "error: option argument missing"
   | item :: rest =>
-      if item.startsWith "--invoice-file=" then
+      if item.startsWith "--pwd=" then
+        .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+      else if item.startsWith "--pwd-file=" then do
+        let passwords ← options.passwords.withPasswordFile (String.ofList (item.toList.drop 11))
+        parseInvoiceOptions rest { options with passwords }
+      else if item.startsWith "--invoice-file=" then
         parseInvoiceOptions rest { options with invoiceFile := some (String.ofList (item.toList.drop 15)) }
       else if item.startsWith "--key-file=" then
         parseInvoiceOptions rest { options with keyFile := some (String.ofList (item.toList.drop 11)) }
@@ -230,6 +240,7 @@ private partial def parseInvoiceOptions (args : List String)
 private def invoiceHelp : String :=
   "Usage: tornado deposit pay-invoice --invoice-file <path> [--key-file <path>] [--chain <id>] [--rpc <url>] [--journal <new-path>] (--dry-run | --broadcast)\n" ++
   "Omit --key-file to enter the private key at a hidden terminal prompt.\n" ++
+  "Encrypted Web3 v3 key files prompt for a hidden password; --pwd-file <path> is required for unattended unlocking.\n" ++
   "Dry run reviews one invoice without signing. Broadcasting requires typing SEND for every reviewed transaction.\n" ++
   "Omit --journal to use a new uniquely named journal in the current directory.\n" ++
   "--non-interactive explicitly authorizes sending without a SEND prompt and requires --key-file. Reviews and validation checks still run.\n"
@@ -256,6 +267,7 @@ private def payInvoiceCommand (args : List String) : IO String := do
       some <$> depositJournalPath options.journal chain
     else pure none
   let keyFile ← Tornado.Runtime.NativeSigner.resolveKeyFile options.keyFile journal
+    { options.passwords with nonInteractive := options.nonInteractive }
   if options.dryRun then
     Tornado.Cli.DepositSend.dryRunPayInvoice invoiceFile keyFile rpc chain
   else
@@ -266,6 +278,7 @@ private def payInvoiceCommand (args : List String) : IO String := do
 private structure MultiDepositOptions where
   notesFile : Option String := none
   keyFile : Option String := none
+  passwords : Tornado.Runtime.NativeSigner.PasswordOptions := {}
   chain : String := "1"
   rpc : Option String := none
   sequential : Bool := false
@@ -288,6 +301,10 @@ private partial def parseMultiDepositOptions (args : List String)
       parseMultiDepositOptions rest { options with notesFile := some value }
   | "--key-file" :: value :: rest =>
       parseMultiDepositOptions rest { options with keyFile := some value }
+  | "--pwd" :: _ => .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: value :: rest => do
+      let passwords ← options.passwords.withPasswordFile value
+      parseMultiDepositOptions rest { options with passwords }
   | "--chain" :: value :: rest =>
       parseMultiDepositOptions rest { options with chain := value }
   | "--rpc" :: value :: rest =>
@@ -308,11 +325,16 @@ private partial def parseMultiDepositOptions (args : List String)
       parseMultiDepositOptions rest { options with journal := some value }
   | "--bundler-url" :: value :: rest =>
       parseMultiDepositOptions rest { options with bundler := some value }
-  | ["--notes-file"] | ["--key-file"] | ["--chain"] | ["--rpc"] | ["--journal"] |
+  | ["--notes-file"] | ["--key-file"] | ["--pwd-file"] | ["--chain"] | ["--rpc"] | ["--journal"] |
     ["--bundler-url"] =>
       .error "error: option argument missing"
   | value :: rest =>
-      if value.startsWith "--notes-file=" then
+      if value.startsWith "--pwd=" then
+        .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+      else if value.startsWith "--pwd-file=" then do
+        let passwords ← options.passwords.withPasswordFile (String.ofList (value.toList.drop 11))
+        parseMultiDepositOptions rest { options with passwords }
+      else if value.startsWith "--notes-file=" then
         parseMultiDepositOptions rest { options with notesFile := some (String.ofList (value.toList.drop 13)) }
       else if value.startsWith "--key-file=" then
         parseMultiDepositOptions rest { options with keyFile := some (String.ofList (value.toList.drop 11)) }
@@ -332,6 +354,7 @@ private def multiDepositHelp : String :=
   "One note defaults to ordinary transactions; --delegated explicitly selects a UserOperation.\n" ++
   "  --chain <id>       Ethereum chain ID (default: 1)\n" ++
   "  --key-file <path>  Optional; omit for hidden terminal entry (never stored as a key file)\n" ++
+  "  --pwd-file <path>  Unlock an encrypted Web3 v3 key using a protected password file\n" ++
   "  --rpc <url>        HTTPS chain RPC URL\n" ++
   "  --sequential      Force ordinary transaction planning\n" ++
   "  --delegated       Force UserOperation deposits; authorize installing/replacing EOA delegation\n" ++
@@ -374,6 +397,7 @@ private def multiDepositCommand (args : List String) : IO String := do
     else if options.experimentalSend then some <$> depositJournalPath options.journal chain
     else pure none
   let keyFile ← Tornado.Runtime.NativeSigner.resolveKeyFile options.keyFile journal
+    { options.passwords with nonInteractive := options.nonInteractive }
   if options.resume then
     return ← Tornado.Cli.DepositResume.command notesFile keyFile rpc journal.get! chain
       options.experimentalSend options.nonInteractive
@@ -481,6 +505,10 @@ private def withdrawalStatusCommand (args : List String) : IO (String × UInt32)
     Tornado.Cli.WithdrawalStatusCommand.statusCommand args
 
 def main (args : List String) : IO UInt32 := do
+  let controls := Tornado.Runtime.NativeSigner.withoutPasswordArguments args
+  if controls.any (fun item => item == "--pwd" || item.startsWith "--pwd=") then
+    IO.eprintln "Error: --pwd is not supported. Use --pwd-file or hidden password entry."
+    return 1
   if args == ["--version"] || args == ["-V"] then
     IO.println "0.1.0"
     return 0

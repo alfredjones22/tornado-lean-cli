@@ -140,6 +140,7 @@ def render (review : Review) : Except String String := do
 private structure Options where
   owner : Option String := none
   ownerKeyFile : Option String := none
+  passwords : NativeSigner.PasswordOptions := {}
   receiver : Option String := none
   chain : String := "1"
   rpc : Option String := none
@@ -157,16 +158,26 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--non-interactive" :: rest => parseOptions rest { options with nonInteractive := true }
   | "--owner" :: value :: rest => parseOptions rest { options with owner := some value }
   | "--owner-key-file" :: value :: rest => parseOptions rest { options with ownerKeyFile := some value }
+  | "--pwd" :: _ => .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: value :: rest => do
+    let passwords ← options.passwords.withPasswordFile value
+    parseOptions rest { options with passwords }
   | "--receiver" :: value :: rest => parseOptions rest { options with receiver := some value }
   | "--chain" :: value :: rest => parseOptions rest { options with chain := value }
   | "--rpc" :: value :: rest => parseOptions rest { options with rpc := some value }
   | ["--owner"] => .error "error: option '--owner <address>' argument missing"
   | ["--owner-key-file"] => .error "error: option '--owner-key-file <path>' argument missing"
+  | ["--pwd-file"] => .error "Password option is missing its value."
   | ["--receiver"] => .error "error: option '--receiver <address>' argument missing"
   | ["--chain"] => .error "error: option '--chain <id>' argument missing"
   | ["--rpc"] => .error "error: option '--rpc <url>' argument missing"
   | item :: rest =>
-      if item.startsWith "--owner=" then
+      if item.startsWith "--pwd=" then
+        .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+      else if item.startsWith "--pwd-file=" then do
+        let passwords ← options.passwords.withPasswordFile (String.ofList (item.toList.drop 11))
+        parseOptions rest { options with passwords }
+      else if item.startsWith "--owner=" then
         parseOptions rest { options with owner := some (String.ofList (item.toList.drop 8)) }
       else if item.startsWith "--owner-key-file=" then
         parseOptions rest { options with ownerKeyFile := some (String.ofList (item.toList.drop 17)) }
@@ -182,6 +193,7 @@ private def help : String :=
   "Usage: tornado smart-account recover --owner <address> --dry-run [options]\n\n" ++
   "Review a supported-asset and EntryPoint-deposit recovery without signing.\n" ++
   "  --owner-key-file <path>  Derive owner through the protected native key boundary\n" ++
+  "  --pwd-file <path>  Unlock an encrypted Web3 v3 owner key file\n" ++
   "  --receiver <address>  Recovery destination (default: owner)\n" ++
   "  --chain <id>         Ethereum chain ID (default: 1)\n" ++
   "  --rpc <url>          HTTPS chain RPC URL\n" ++
@@ -195,16 +207,19 @@ def recoverCommand (args : List String) : IO String := do
     throw <| IO.userError "--non-interactive requires --owner or --owner-key-file for recovery review."
   if !options.dryRun then
     throw <| IO.userError "Native smart-account recovery only supports --dry-run."
+  if options.ownerKeyFile.isNone && options.passwords.hasSource then
+    throw <| IO.userError "--pwd-file requires --owner-key-file."
+  let chain ← fromExcept (parseChainInput options.chain)
   let owner ← match options.ownerKeyFile, options.owner with
     | none, none => do
-      let source ← NativeSigner.resolveKeyFile none
+      let source ← NativeSigner.resolveKeyFile none none
+        { options.passwords with nonInteractive := options.nonInteractive }
       NativeSigner.addressFromProtectedFile source
     | none, some ownerRaw => fromExcept (parseOwner ownerRaw)
     | some file, expected => do
-      let current ← IO.currentDir
-      let absolute := if (System.FilePath.mk file).isAbsolute then file
-        else (current / file).toString
-      let derived ← NativeSigner.addressFromProtectedFile absolute
+      let source ← NativeSigner.resolveKeyFile (some file) none
+        { options.passwords with nonInteractive := options.nonInteractive }
+      let derived ← NativeSigner.addressFromProtectedFile source
       if let some raw := expected then
         if (← fromExcept <| parseOwner raw) != derived then
           throw <| IO.userError "Owner key differs from the expected owner address."
@@ -212,7 +227,6 @@ def recoverCommand (args : List String) : IO String := do
   let recipient ← match options.receiver with
     | none => pure owner
     | some raw => fromExcept <| parseOwner raw
-  let chain ← fromExcept (parseChainInput options.chain)
   let environmentRpc ← IO.getEnv "TORNADO_RPC_URL"
   let rpc := (options.rpc.orElse (fun _ => environmentRpc)).getD (defaultRpc chain)
   let requestId ← IO.mkRef (1 : Nat)

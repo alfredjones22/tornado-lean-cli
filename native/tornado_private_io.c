@@ -286,14 +286,38 @@ int tornado_private_parse_secp256k1_key(const uint8_t *raw, size_t size, uint8_t
     return valid == 1;
 }
 
-/* Read a protected key directly into caller-owned native memory. This uses
- * the same descriptor walk, inode checks, size/mtime/ctime recheck and ACL
- * policy as readPrivate. The bridge owns clearing scratch and key32. */
-int tornado_private_read_secp256k1_key(
-    b_lean_obj_arg path, uint8_t key32[32],
-    uint8_t scratch[TORNADO_MAX_HEX_KEY_FILE], tornado_key_status *status) {
+/* Same protected descriptor walk and stability policy for bounded native-only
+ * raw keys, encrypted JSON and passwords. No secret bytes become Lean values. */
+int tornado_private_key_material_size(b_lean_obj_arg path, size_t capacity,
+    size_t *size, tornado_key_status *status) {
     key_status_set(status, TORNADO_KEY_UNKNOWN);
-    if (key32 == NULL || scratch == NULL) return 0;
+    *size = 0;
+    char name[NAME_MAX + 1];
+    int dir = private_parent_status(path, name, status);
+    if (dir < 0) return 0;
+    int fd = openat(dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    int saved = errno;
+    close(dir);
+    if (fd < 0) { key_open_status(status, saved, 0); return 0; }
+    struct stat st;
+    int ok = private_regular_status(fd, &st, status);
+    if (ok && (st.st_size < 0 || (uint64_t)st.st_size > capacity)) {
+        key_status_set(status, TORNADO_KEY_FILE_SIZE); ok = 0;
+    }
+    if (close(fd) != 0) { key_status_set(status, TORNADO_KEY_FILE_CLOSE); ok = 0; }
+    if (!ok) return 0;
+    *size = (size_t)st.st_size;
+    key_status_set(status, TORNADO_KEY_OK);
+    return 1;
+}
+
+int tornado_private_read_key_material(b_lean_obj_arg path,
+    uint8_t *scratch, size_t capacity, size_t *out_size, tornado_key_status *status,
+    tornado_key_file_stamp *stamp) {
+    key_status_set(status, TORNADO_KEY_UNKNOWN);
+    if (scratch == NULL || out_size == NULL || capacity == 0 ||
+        capacity > TORNADO_MAX_PRIVATE_FILE) return 0;
+    *out_size = 0;
     char name[NAME_MAX + 1];
     int dir = private_parent_status(path, name, status);
     if (dir < 0) return 0;
@@ -309,7 +333,7 @@ int tornado_private_read_secp256k1_key(
     if (!private_regular_status(fd, &before, status)) {
         close(fd); return 0;
     }
-    if (before.st_size < 0 || before.st_size > TORNADO_MAX_HEX_KEY_FILE) {
+    if (before.st_size < 0 || (uint64_t)before.st_size > capacity) {
         key_status_set(status, TORNADO_KEY_FILE_SIZE);
         close(fd); return 0;
     }
@@ -337,6 +361,27 @@ int tornado_private_read_secp256k1_key(
         key_status_set(status, TORNADO_KEY_FILE_CLOSE); stable = 0;
     }
     if (!stable) return 0;
+    *out_size = size;
+    if (stamp != NULL) {
+        stamp->values[0] = (uint64_t)after.st_dev;
+        stamp->values[1] = (uint64_t)after.st_ino;
+        stamp->values[2] = (uint64_t)after.st_size;
+        stamp->values[3] = (uint64_t)after.st_mtime;
+        stamp->values[4] = (uint64_t)after.st_ctime;
+        stamp->values[5] = (uint64_t)ST_MTIME_NSEC(after);
+        stamp->values[6] = (uint64_t)ST_CTIME_NSEC(after);
+    }
+    key_status_set(status, TORNADO_KEY_OK);
+    return 1;
+}
+
+/* Read a protected raw key directly into caller-owned locked native memory. */
+int tornado_private_read_secp256k1_key(
+    b_lean_obj_arg path, uint8_t key32[32],
+    uint8_t scratch[TORNADO_MAX_HEX_KEY_FILE], tornado_key_status *status) {
+    size_t size = 0;
+    if (key32 == NULL || !tornado_private_read_key_material(path, scratch,
+            TORNADO_MAX_HEX_KEY_FILE, &size, status, NULL)) return 0;
     if (!tornado_private_parse_secp256k1_key(scratch, size, key32)) {
         key_status_set(status, TORNADO_KEY_FILE_FORMAT); return 0;
     }

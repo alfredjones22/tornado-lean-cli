@@ -78,6 +78,14 @@ def main : IO UInt32 := do
     catch error => pure error.toString
     require (noOwner == "--non-interactive requires --owner or --owner-key-file for recovery review.")
       "Unattended recovery review attempted to prompt for an unspecified owner key."
+    for passwordArgs in [[], ["--pwd-file", "/public-password-fixture"]] do
+      let invalidChain ← try
+        let _ ← recoverCommand (["--owner-key-file", "/public-key-fixture",
+          "--chain", "invalid-chain", "--dry-run", "--non-interactive"] ++ passwordArgs)
+        pure ""
+      catch error => pure error.toString
+      require (invalidChain == "Chain must be 1 or 11155111.")
+        "Invalid chain attempted to unlock or read an owner key before rejection."
     rejects (recoverCommand ["--owner", "0x1111111111111111111111111111111111111111"])
       "Recovery without --dry-run reached the RPC."
     rejects (recoverCommand ["--owner", "0x1111111111111111111111111111111111111111",

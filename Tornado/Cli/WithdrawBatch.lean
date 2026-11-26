@@ -32,6 +32,7 @@ private def checked (value : Except String α) : IO α :=
 private structure Options where
   notesFile : Option String := none
   ownerKeyFile : Option String := none
+  passwords : NativeSigner.PasswordOptions := {}
   receiver : Option String := none
   contractCalls : Option String := none
   chain : String := "1"
@@ -59,6 +60,10 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--notes-file" :: value :: rest | "--note-file" :: value :: rest =>
     parseOptions rest { options with notesFile := some value }
   | "--owner-key-file" :: value :: rest => parseOptions rest { options with ownerKeyFile := some value }
+  | "--pwd" :: _ => .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: value :: rest => do
+    let passwords ← options.passwords.withPasswordFile value
+    parseOptions rest { options with passwords }
   | "--receiver" :: value :: rest | "--recipient" :: value :: rest =>
     parseOptions rest { options with receiver := some value }
   | "--contract-calls" :: value :: rest => parseOptions rest { options with contractCalls := some value }
@@ -70,13 +75,18 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--history-cache-dir" :: value :: rest => parseOptions rest { options with cacheDir := some value }
   | "--proving-assets-root" :: value :: rest => parseOptions rest { options with provingRoot := some value }
   | "--status-dir" :: value :: rest => parseOptions rest { options with statusDir := value }
-  | ["--notes-file"] | ["--note-file"] | ["--owner-key-file"] | ["--receiver"] | ["--recipient"] |
+  | ["--notes-file"] | ["--note-file"] | ["--owner-key-file"] | ["--pwd-file"] | ["--receiver"] | ["--recipient"] |
     ["--contract-calls"] | ["--chain"] | ["--rpc"] |
     ["--bundler-url"] | ["--simulation-rpc"] | ["--assets-dir"] |
     ["--history-cache-dir"] | ["--proving-assets-root"] |
     ["--status-dir"] => .error "Batch withdrawal option is missing its value."
   | argument :: rest =>
-    if argument.startsWith "--notes-file=" then
+    if argument.startsWith "--pwd=" then
+      .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+    else if argument.startsWith "--pwd-file=" then do
+      let passwords ← options.passwords.withPasswordFile (String.ofList (argument.toList.drop 11))
+      parseOptions rest { options with passwords }
+    else if argument.startsWith "--notes-file=" then
       parseOptions rest { options with notesFile := some (String.ofList (argument.toList.drop 13)) }
     else if argument.startsWith "--note-file=" then
       parseOptions rest { options with notesFile := some (String.ofList (argument.toList.drop 12)) }
@@ -112,6 +122,7 @@ private def help : String :=
   "--note-file is an alias for --notes-file; --recipient is an alias for --receiver.\n" ++
   "Without contract calls, proceeds are forwarded to the selected receiver (default: smart account).\n" ++
   "--non-interactive accepts unattended review and requires --owner-key-file.\n" ++
+  "Encrypted owner key files prompt for a hidden password; --pwd-file <path> is required in non-interactive mode.\n" ++
   "--assets-dir, --history-cache-dir and --proving-assets-root are accepted for live-command consistency; dry-run does not load history or proving assets.\n" ++
   "One note requires at least one contract call; otherwise select 2–12 notes.\n" ++
   "No proof, fee quote, signature or UserOperation is created.\n"
@@ -349,8 +360,9 @@ def withdrawBatchCommand (args : List String) : IO String := do
     | fail "error: required option '--notes-file <path>' not specified"
   if options.nonInteractive && options.ownerKeyFile.isNone then
     fail "--non-interactive requires --owner-key-file for batch withdrawals."
-  let keyFile ← NativeSigner.resolveKeyFile options.ownerKeyFile
   let chain ← checked (parseChainInput options.chain)
+  let keyFile ← NativeSigner.resolveKeyFile options.ownerKeyFile none
+    { options.passwords with nonInteractive := options.nonInteractive }
   let environmentRpc ← IO.getEnv "TORNADO_RPC_URL"
   let rpc ← checked (checkedEndpoint
     ((options.rpc.orElse (fun _ => environmentRpc)).getD (defaultRpc chain)))

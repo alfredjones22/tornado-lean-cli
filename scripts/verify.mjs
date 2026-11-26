@@ -340,6 +340,16 @@ const requiredMathTests = {
   'SamplerField.lean': 'PASS: actual Scalar-field bijection and byte admission boundaries; arbitrary-event sequential counts, failure mass, and incorrect-cast negative control',
   'ScalarMul.lean': 'PASS: 50 exact old/new raw G1 scalar comparisons on five public representatives, q/q+1/2q/2q+1 and 512-bit scalar boundaries, plus 20 modular-reduction expectations',
 }
+// The interpreter cannot resolve the CLI's protected native key boundary.
+// Keep command admission tests linked to the real boundary rather than stubbing it.
+const nativeFocusedTestTargets = {
+  'tests/WorkerDisclosure.lean': 'worker_disclosure_test',
+  'tests/WitnessCertificate.lean': 'witness_certificate_test',
+  'tests/WithdrawBatch.lean': 'withdraw_batch_command_test',
+  'tests/SmartAccountRecover.lean': 'smart_account_recover_command_test',
+  'tests/RecoverySend.lean': 'recovery_send_command_test',
+  'tests/SponsoredPreparation.lean': 'sponsored_preparation_test',
+}
 const requiredFocusedTests = {
   'tests/WitnessCertificate.lean': 'PASS: actual public-asset gate admits all 28275 rows before any private input\nPASS: public certificate size, gzip integrity, schema, constant-one, topology, and Pedersen base mutations reject\nPASS: 15 independent Pedersen schedule checks (2 acceptance, 13 adversarial rejection)',
   'tests/LibraryAliases.lean': 'PASS: legacy aliases preserve canonical structures, constructors, projections, proof terms and hash output',
@@ -417,7 +427,7 @@ const trustedExterns = {
   'Tornado/Runtime/NativeSigner.lean': ['tornado_secure_pubkey_from_key_file',
     'tornado_secure_sign_digest_from_key_file', 'tornado_worker_disable_core_dumps',
     'tornado_verify_public_digest', 'tornado_secure_prompt_key',
-    'tornado_secure_clear_prompt_key'],
+    'tornado_secure_clear_prompt_key', 'tornado_secure_unlock_key_file'],
 }
 const testOnlyExterns = {
   'tests/ReservationAdmissionProcess.lean': ['tornado_test_fault_arm'],
@@ -763,6 +773,7 @@ try {
       'tests/JournalIORefinement.lean',
       'tests/DepositStatus.lean', 'tests/DepositStatusCommand.lean',
       'tests/DepositSend.lean', 'tests/DepositMulti.lean', 'tests/NativeSigner.lean',
+      'tests/EncryptedKeyStore.lean',
       'tests/WithdrawalStatusCommand.lean', 'tests/RelayerWithdrawalStatus.lean',
       'tests/Gzip.lean',
       'tests/FrFFT.lean',
@@ -869,6 +880,7 @@ try {
     'scripts/notes-create-smoke.mjs',
     'scripts/test-protected-io.mjs', 'scripts/test-https-transport.mjs',
     'scripts/test-interactive-signer.py', 'scripts/test-cli-input-modes.py',
+    'scripts/test-encrypted-keyfiles.py',
     'scripts/test-deposit-resume-cli.py',
     'scripts/test-https-get.mjs', 'scripts/test-https-get-boundary.mjs',
     'scripts/test-loopback-http.mjs',
@@ -901,6 +913,7 @@ try {
     'native/tornado_private_io.c', 'native/tornado_private_io.h',
     'tests/native/reservation_fault_io.c',
     'native/tornado_https.c', 'native/tornado_secret_sign.c',
+    'native/tornado_keystore.c', 'native/tornado_keystore.h',
     'native/vendor/libsecp256k1/UPSTREAM.md',
     'native/https_get_boundary_test.c',
     'assets/history/11155111/0x0e999c5285141ccb6dfae68a0921f37abd3e6a87-6ac12c3cdf215493.json.gz',
@@ -1005,9 +1018,9 @@ try {
     'https_transport_test', 'https_get_test', 'attempt_journal_test',
     'journal_refinement_test', 'note_claims_test', 'protected_replace_test',
     'selected_pool_bootstrap_test', 'deposit_send_test', 'deposit_multi_test',
-    'native_signer_test', 'reservation_admission_process_test',
+    'native_signer_test', 'encrypted_keyfile_test', 'reservation_admission_process_test',
     'withdraw_proof_test', 'tornado_prover_worker', 'prover_worker_test', 'history_snapshot_test',
-    'prover_worker_metadata_test', 'relayer_submit_test', 'worker_disclosure_test', 'witness_certificate_test',
+    'prover_worker_metadata_test', 'relayer_submit_test', ...Object.values(nativeFocusedTestTargets),
     'gzip_test', 'groth16_full_public_test',
     'classic_proof_pipeline_full_test', ...moduleTargets], 600000)
   const buildArtifacts = {
@@ -1026,14 +1039,14 @@ try {
     existsSync(path('.lake/build/bin/deposit_send_test')) &&
     existsSync(path('.lake/build/bin/deposit_multi_test')) &&
     existsSync(path('.lake/build/bin/native_signer_test')) &&
+    existsSync(path('.lake/build/bin/encrypted_keyfile_test')) &&
     existsSync(path('.lake/build/bin/withdraw_proof_test')) &&
     existsSync(path('.lake/build/bin/tornado_prover_worker')) &&
     existsSync(path('.lake/build/bin/prover_worker_test')) &&
     existsSync(path('.lake/build/bin/history_snapshot_test')) &&
     existsSync(path('.lake/build/bin/prover_worker_metadata_test')) &&
     existsSync(path('.lake/build/bin/relayer_submit_test')) &&
-    existsSync(path('.lake/build/bin/worker_disclosure_test')) &&
-    existsSync(path('.lake/build/bin/witness_certificate_test')) &&
+    Object.values(nativeFocusedTestTargets).every(target => existsSync(path(`.lake/build/bin/${target}`))) &&
     existsSync(path('.lake/build/bin/gzip_test')) &&
     existsSync(path('.lake/build/bin/groth16_full_public_test')) &&
     existsSync(path('.lake/build/bin/classic_proof_pipeline_full_test')),
@@ -1104,6 +1117,9 @@ try {
   requireCheck(run('python3', ['-I', 'scripts/test-interactive-signer.py']).trim() ===
     'PASS: hidden PTY input, native signing, paste isolation, cancellation, EOF, no-TTY and terminal restoration',
     'Interactive native signer or terminal protections changed')
+  requireCheck(run('python3', ['-I', 'scripts/test-encrypted-keyfiles.py'], 300000).trim() ===
+    'PASS: encrypted keyfile vectors, guarded unlock/signing, password sources, CLI admission and hidden PTY checks',
+    'Encrypted keystore compatibility, protected native unlock or CLI password admission changed')
   requireCheck(run('python3', ['-I', 'scripts/test-cli-input-modes.py']).trim() ===
     'PASS: broadcast flag admission, optional account key files, no-TTY failures and resume flag conflicts',
     'CLI broadcast, resume or interactive key admission changed')
@@ -1285,10 +1301,9 @@ try {
     for (const [file, expected] of Object.entries(requiredFocusedTests)) {
       const args = ['env', 'lean', '--run', file]
       if (file === 'tests/ProvingKey.lean') args.push(keyTempPath)
-      const output = file === 'tests/WorkerDisclosure.lean'
-        ? run(path('.lake/build/bin/worker_disclosure_test'), [], 600000)
-        : file === 'tests/WitnessCertificate.lean'
-          ? run(path('.lake/build/bin/witness_certificate_test'), [], 600000)
+      const nativeTarget = nativeFocusedTestTargets[file]
+      const output = nativeTarget
+        ? run(path(`.lake/build/bin/${nativeTarget}`), [], 600000)
         : run('lake', args, 600000)
       requireCheck(output.trim() === expected, `Unexpected focused native test output from ${file}: ${output}`)
       focusedTests.push({ file, result: 'PASS', detail: expected })
@@ -1461,7 +1476,7 @@ try {
     [['withdraw', 'one', '--help'], 'Usage: tornado withdraw one --note-file'],
     [['withdraw', 'batch', '--help'], 'Usage: tornado withdraw batch --notes-file'],
     [['withdraw', 'status', '--help'], 'Usage: tornado withdraw status --status-file'],
-    [['smart-account', 'recover', '--help'], 'Usage: tornado smart-account recover --owner'],
+    [['smart-account', 'recover', '--help'], 'Usage: tornado smart-account recover [--owner-key-file <path>] (--dry-run | --broadcast --journal <new-path>) [options]'],
     [['history', '--help'], 'Usage: tornado history --note-file'],
     [['compliance', 'report', '--help'], 'Usage: tornado compliance report --note-file'],
   ]) requireCheck(run(leanBin, args).startsWith(expected),
@@ -1598,8 +1613,14 @@ try {
       bridge: 'native/tornado_secret_sign.c',
       status: 'PUBLIC_VECTOR_TESTED_NATIVE_SECRET_PATH',
       interactiveKeys: 'PUBLIC_FIXTURE_PTY_TESTED; NATIVE_ONLY_SESSION; NO_DISK_KEY',
+      encryptedKeyfiles: { format: 'WEB3_SECRET_STORAGE_V3',
+        primitives: ['OPENSSL_LIBCRYPTO_3_2_PLUS', 'LIBSODIUM_1_0_18_PLUS'],
+        kdfs: ['SCRYPT', 'PBKDF2_HMAC_SHA256'], cipher: 'AES_128_CTR', mac: 'KECCAK_256',
+        tests: 'PUBLIC_VECTORS_PASSWORD_SOURCES_PTY_AND_SOURCE_BINDING',
+        decryptedKeysRemainNative: true, passwordsRemainNative: true,
+        completeErasureProved: false },
       upstreamTests: 'ONE_ITERATION_PASSED; HIGH_COUNT_CASES_SKIPPED',
-      limitation: 'C, compiler, OS memory behavior, and libsecp256k1 remain trusted; this gate uses public signer fixtures and does not broadcast transactions; complete erasure is not proved' },
+      limitation: 'C, compiler, OS memory behavior, libsecp256k1, OpenSSL libcrypto and libsodium remain trusted; this gate uses public signer fixtures and does not broadcast transactions; complete erasure is not proved' },
     attemptJournal: { status: 'BOUNDED_TESTED_NOT_CONNECTED',
       maxRecords: 20, crossAttemptNoteClaims: 'LOCAL_INSTANCE_TESTED_NOT_CONNECTED',
       replayRecordRefinement: 'FOUR_GUARD_THEOREMS_AND_FAULT_TESTS',

@@ -41,13 +41,56 @@ opaque promptKey (anchor : @& String) : IO String
 @[extern "tornado_secure_clear_prompt_key"]
 opaque clearPromptKey : IO Unit
 
+/-- Classify a protected raw key or unlock a Web3 Secret Storage v3 keystore.
+The native boundary retains decrypted keys in its command-local session and
+returns only the original public source path. Mode bits select a password
+file and non-interactive policy; password contents remain native. -/
+@[extern "tornado_secure_unlock_key_file"]
+opaque unlockKeyFile (path passwordFile : @& String) (mode : UInt32) : IO String
+
+/-- Only a password-file path and prompt policy cross the Lean boundary.
+Password contents are read by native code, never represented as Lean values. -/
+structure PasswordOptions where
+  passwordFile : Option String := none
+  nonInteractive : Bool := false
+  deriving Inhabited
+
+def PasswordOptions.hasSource (options : PasswordOptions) : Bool :=
+  options.passwordFile.isSome
+
+def PasswordOptions.withPasswordFile (options : PasswordOptions) (value : String) :
+    Except String PasswordOptions := do
+  if options.hasSource then throw "Use only one --pwd-file option."
+  if value.isEmpty then throw "Provide a nonempty --pwd-file path."
+  return { options with passwordFile := some value }
+
+/-- Mode/help dispatch must not mistake a password-file path such as
+`--broadcast` or `--help` for a control flag. Parsers use the original arguments. -/
+def withoutPasswordArguments : List String → List String
+  | [] => []
+  | "--pwd-file" :: _ :: rest => withoutPasswordArguments rest
+  | value :: rest =>
+    if value.startsWith "--pwd-file=" then
+      withoutPasswordArguments rest
+    else value :: withoutPasswordArguments rest
+
 /-- File arguments remain optional at the CLI boundary. Interactive sources
 use the journal directory for durable claims, or the home directory otherwise.
 No private key or terminal input is represented by a Lean value. -/
-def resolveKeyFile (file : Option String) (journal : Option String := none) : IO String := do
+def resolveKeyFile (file : Option String) (journal : Option String := none)
+    (passwords : PasswordOptions := {}) : IO String := do
   let current ← IO.currentDir
+  let absolute (path : String) :=
+    if (System.FilePath.mk path).isAbsolute then path else (current / path).toString
   if let some path := file then
-    return if (System.FilePath.mk path).isAbsolute then path else (current / path).toString
+    if path.isEmpty then throw <| IO.userError "Provide a nonempty account key-file path."
+    let mode : UInt32 := (if passwords.passwordFile.isSome then 2 else 0) +
+      (if passwords.nonInteractive then 4 else 0)
+    return ← unlockKeyFile (absolute path) (passwords.passwordFile.map absolute |>.getD "") mode
+  if passwords.hasSource then
+    throw <| IO.userError "--pwd-file requires --key-file or --owner-key-file."
+  if passwords.nonInteractive then
+    throw <| IO.userError "--non-interactive requires an account key file; hidden key entry is unavailable."
   let directory ← match journal with
     | some path => do
       let absolute := if (System.FilePath.mk path).isAbsolute then System.FilePath.mk path

@@ -12,7 +12,8 @@ protocol parsing, cryptography and proof generation. Protected account-key
 signing and OS services use the native boundaries described in
 [Trust boundaries](docs/TRUST_BOUNDARIES.md).
 
-It supports independent or mnemonic-derived
+CLI Functionality should mirror the
+[New Era Tornado UI](https://github.com/alfredjones22/tornado-ui-new-era). It supports independent or mnemonic-derived
 notes, denomination planning, sequential or delegated deposits, sponsored or
 Classic relayer withdrawals, smart-account contract calls, status, recovery,
 history and compliance reports. Lean is pinned to `leanprover/lean4:v4.29.1`.

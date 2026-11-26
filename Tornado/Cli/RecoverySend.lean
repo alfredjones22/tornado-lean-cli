@@ -139,6 +139,7 @@ def withSenderLock (createLock removeLock : IO Unit)
 private structure Options where
   owner : Option String := none
   ownerKeyFile : Option String := none
+  passwords : NativeSigner.PasswordOptions := {}
   receiver : Option String := none
   chain : String := "1"
   rpc : Option String := none
@@ -163,6 +164,10 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--owner-key-file" :: value :: rest =>
     if options.ownerKeyFile.isSome then .error "Duplicate recovery key option."
     else parseOptions rest { options with ownerKeyFile := some value }
+  | "--pwd" :: _ => .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+  | "--pwd-file" :: value :: rest => do
+    let passwords ← options.passwords.withPasswordFile value
+    parseOptions rest { options with passwords }
   | "--receiver" :: value :: rest =>
     if options.receiver.isSome then .error "Duplicate recovery receiver option."
     else parseOptions rest { options with receiver := some value }
@@ -173,10 +178,14 @@ private partial def parseOptions (args : List String) (options : Options := {}) 
   | "--journal" :: value :: rest =>
     if options.journal.isSome then .error "Duplicate recovery journal option."
     else parseOptions rest { options with journal := some value }
-  | ["--owner"] | ["--owner-key-file"] | ["--receiver"] | ["--chain"] |
+  | ["--owner"] | ["--owner-key-file"] | ["--pwd-file"] | ["--receiver"] | ["--chain"] |
       ["--rpc"] | ["--journal"] => .error "Recovery option is missing its value."
   | argument :: rest =>
-    if argument.startsWith "--owner=" then
+    if argument.startsWith "--pwd=" then
+      .error "--pwd is not supported. Use --pwd-file or hidden password entry."
+    else if argument.startsWith "--pwd-file=" then
+      parseOptions ("--pwd-file" :: String.ofList (argument.toList.drop 11) :: rest) options
+    else if argument.startsWith "--owner=" then
       parseOptions ("--owner" :: String.ofList (argument.toList.drop 8) :: rest) options
     else if argument.startsWith "--owner-key-file=" then
       parseOptions ("--owner-key-file" :: String.ofList (argument.toList.drop 17) :: rest) options
@@ -202,6 +211,7 @@ private def help : String :=
   "  --receiver <address>  Recovery recipient (default: owner)\n" ++
   "  --chain <id>          Ethereum chain ID (default: 1)\n" ++
   "  --rpc <url>           HTTPS chain RPC URL\n" ++
+  "  --pwd-file <path>  Unlock an encrypted Web3 v3 owner key file\n" ++
   "Sending requires RECOVER approval, or explicit --non-interactive authorization with --owner-key-file. All reviews and checks still run.\n"
 
 /-- Experimental live adapter. It neither chooses an existing
@@ -209,9 +219,12 @@ journal for retry nor clears an uncertain prior sender lock. The account is
 predicted locally and its identity and sweep balances are read again after
 approval, before the protected signer can be entered. -/
 def recoverCommand (args : List String) : IO String := do
-  if args.contains "--help" || args.contains "-h" then return help
-  if !args.contains "--broadcast" then
-    if !args.contains "--dry-run" then
+  let controls := NativeSigner.withoutPasswordArguments args
+  if controls.any (fun item => item == "--pwd" || item.startsWith "--pwd=") then
+    fail "--pwd is not supported. Use --pwd-file or hidden password entry."
+  if controls.contains "--help" || controls.contains "-h" then return help
+  if !controls.contains "--broadcast" then
+    if !controls.contains "--dry-run" then
       fail "Choose --dry-run or --broadcast for recovery."
     return (← SmartAccountRecover.recoverCommand args)
   let options ← checked <| parseOptions args
@@ -223,6 +236,7 @@ def recoverCommand (args : List String) : IO String := do
   if options.nonInteractive && options.ownerKeyFile.isNone then
     fail "--non-interactive requires --owner-key-file for recovery sending."
   let keyPath ← NativeSigner.resolveKeyFile options.ownerKeyFile options.journal
+    { options.passwords with nonInteractive := options.nonInteractive }
   let journalPath ← absolutePath journalFile
   let owner ← NativeSigner.addressFromProtectedFile keyPath
   if let some raw := options.owner then
