@@ -48,10 +48,16 @@ in `scripts/verify.mjs`; interpreter-only execution does not supply linked
 native symbols. Worker tests use protected temporary directories under
 `tests/`, not the shared `/tmp` path.
 
-The [local EVM suite](LOCAL_EVM_SCOPE.md) independently checks native calldata
-and public proof fixtures against actual Solidity account/paymaster/verifier
-code using synthetic local state. Its compiler/source dependencies and the
-limits of its synthetic EntryPoint and pools are documented there.
+TLS regression coverage is platform-dependent. The GET tests reject untrusted
+certificates on macOS, but its system libcurl does not use the temporary
+`CURL_CA_BUNDLE`, so the trusted-local-fetch case is skipped there. On supported
+Linux libcurl builds, that case also exercises decoding, body caps, redirects,
+HTTP status and cache headers. Production code retains the system trust store;
+there is no test-only CA bypass in the transport.
+
+The local EVM suite independently checks native calldata and public proof
+fixtures against actual Solidity account/paymaster/verifier code using
+synthetic local state; its prerequisites and boundaries are described below.
 
 ## Full regression gate
 
@@ -77,14 +83,76 @@ reference hashes remain in the fixture manifests for reproducibility; they
 do not define the CLI's current specification. Full native proof/key checks can take several
 minutes each. No real funded transaction is part of this gate.
 
+## Local EVM interoperability
+
+```sh
+node scripts/test-local-evm.mjs
+```
+
+This runner compiles pinned sources offline, checks source/compiler/bytecode
+hashes against [`artifact-provenance.json`](../fixtures/evm/artifact-provenance.json),
+starts its own Anvil on an ephemeral loopback port with chain ID 31337, and
+cleans up its server and compiler output. It accepts no RPC/fork URL, private
+key or network-broadcast option.
+
+The standalone suite needs Node 20+, the pinned Lean toolchain and compiled
+imports, `forge`, `cast`, `anvil`, and cached solc 0.7.6 and 0.8.28. The reference
+Foundry installation is v1.6.0 nightly; compilation uses `forge build --offline`.
+Account/paymaster sources must exist at `../kohaku-contracts/privacy-paymaster`
+or `TORNADO_EVM_CONTRACTS_SOURCE`. Checked revisions are privacy-paymaster
+`1b23e91a06fb4af50220507febf38bd05078e6a4`, account-abstraction
+`4cbc06072cdc19fd60f285c5997f4f7f57a588de`, and OpenZeppelin
+`5fd1781b1454fd1ef8e722282f86f9293cacf256`.
+
+The fixture pins every transitive Solidity source, compiler, optimizer and
+metadata setting, and creation/runtime hashes before constructor-immutable
+patching. Classic Verifier uses solc 0.7.6/Istanbul; other contracts use
+0.8.28/Cancun, with 200 optimizer runs and metadata hash `none`. Deliberate
+regeneration after reviewing a source change uses
+`node scripts/build-local-evm-fixtures.mjs --pin`.
+
+The suite has 133 assertions. Actual Classic verifier code accepts three public
+proofs and rejects all eighteen single-public-signal mutations. Actual
+SimpleAccount/factory/proxy code exercises native deployment/batch calldata,
+owner authorization, ordered calls and rollback. Actual paymaster validation
+and `postOp` exercise sponsor recipient/fee binding and a controlled refund.
+The native sponsored batch builder supplies a checked public proof and exact
+net-forwarding suffix; a synthetic ledger rejects a repeated public nullifier.
+
+Deposit cases use actual `DepositMulti.publicItems`, the certified planner and
+`DepositBatch7702.callsData` against independently pinned commitments/amounts.
+They check ordered ETH deposits and a six-note synthetic token plan's four-plus-
+two split, exact allowance, reset-before-approve, zero ETH on token deposits,
+remaining chunk budget and deficient-balance rejection. These token notes are
+relabelled public fixtures; no spend proof is generated for them.
+
+Simple7702 deposit execution uses the exact hashed runtime in
+[`simple7702-code.json`](../fixtures/simple7702-code.json), placed at synthetic
+senders. Its source compilation is not reproduced by the compiler-provenance
+step, and the fixed EntryPoint caller is impersonated. Account/paymaster
+addresses and storage are also placed synthetically; this does not authenticate
+live deployment identity.
+
+EntryPoint, tokens, pools and ledgers are synthetic. The ETH ledger uses a fixed
+root and real verifier, not the full Classic deposit/Merkle contract; the token
+pool does not verify proofs. Validation, execution and `postOp` are called
+separately. The suite does not run full `handleOps`, validate owner signatures,
+check EntryPoint gas accounting/deposits, nonce/replay or bundler ERC-7562 rules,
+authenticate chain history, verify a token-price oracle, or establish EIP-7702
+authorization/delegation lifecycle behavior.
+
+Imported paymaster sources retain their `UNLICENSED` notices. They are compiled
+from the local pinned checkout into a temporary directory and are not vendored.
+The synthetic harness's MIT license does not change those source licenses.
+
 ## Interpreting evidence
 
 A full report identifies its exact input hashes and the CLI/worker bytes
 snapshotted before tests and checked again before the verdict. After changing source, a prior
 successful report is not evidence for that new source. A focused success
 establishes only that check's scope; a kernel-only success establishes neither
-compatibility nor physical IO behavior. The [security contracts](SECURITY_CONTRACTS.md)
-and [proof scope](PROOF_SCOPE.md) distinguish acceptance invariants,
+compatibility nor physical IO behavior. The [security specification](SECURITY_SPEC.md)
+and [proof coverage](PROOFS.md) distinguish acceptance invariants,
 construction theorems, finite test evidence and external assumptions.
 
 After a fresh full gate, [build provenance](BUILD_PROVENANCE.md) can record

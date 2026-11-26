@@ -1,7 +1,0 @@
-# Native one-note withdrawal status scope
-
-`withdraw status --status-file <path>` reads a protected `one-note-4337` status file, checks the selected RPC chain ID, and seeks a transaction through the selected bundler receipt, an already recorded transaction hash, or EntryPoint logs. A transaction hash is only a hint. The command reports `confirmed` only after a successful exact transaction receipt contains the matching EntryPoint `UserOperationEvent` and pool `Withdrawal` event for the recorded sender, nonce, paymaster, recipient, nullifier hash, and fee. A malformed, contradictory, or unavailable response remains `unknown` or `pending`.
-
-Candidate records are checked individually. A confirmed candidate takes precedence; an uncertain candidate is never silently replaced. The command updates the protected journal through the native byte-for-byte compare-and-replace binding. A stale or concurrent journal update fails closed. The original RPC URL is used unless `--rpc` explicitly overrides it. The configured bundler remains a source of hints, not finality.
-
-Offline tests cover exact confirmation, failed EntryPoint execution, pending receipt, bundler/log-index loss with a saved hash, wrong chain, wrong receipt hash, and multiple signed candidates. This is not a consensus client. An RPC that fabricates a consistent receipt and logs can still mislead the command; no finality threshold or independent provider agreement is established. The C/OS binding and disk behavior are trusted assumptions, not Lean proofs.

@@ -13,3 +13,4 @@ tornado-withdraw-*.json
 .*.tornado-lock
 .tornado-replace-*
 .sepolia-tests/
+.DS_Store

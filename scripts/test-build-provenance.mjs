@@ -43,7 +43,7 @@ try {
   put('proofs/LeanCryptoProofs/PublicSynthetic.lean','theorem syntheticPublicProof : 1 = 1 := rfl\n');
   put('app-proofs/TornadoProofs/PublicSynthetic.lean','theorem syntheticApplicationProof : 2 = 2 := rfl\n');
   put('docs/BUILD_PROVENANCE.md','Public synthetic provenance scope.\n');
-  put('docs/SECURITY_CONTRACTS.md','Public synthetic verification boundary.\n');
+  put('docs/SECURITY_SPEC.md','Public synthetic verification boundary.\n');
   put('.gitignore','.lake/\nreports/\n');
   put('native/synthetic.c','int public_synthetic_value(void) { return 7; }\n');
   put('scripts/verify.mjs','throw new Error("Synthetic report only; not a real verifier");\n');
@@ -62,7 +62,7 @@ try {
   const inputs=['Main.lean','lakefile.lean','lake-manifest.json','lean-toolchain','native/synthetic.c',
     'packages/lean-crypto/LeanCrypto/PublicSynthetic.lean','proofs/LeanCryptoProofs/PublicSynthetic.lean',
     'app-proofs/TornadoProofs/PublicSynthetic.lean',
-    'docs/BUILD_PROVENANCE.md','docs/SECURITY_CONTRACTS.md','.gitignore',
+    'docs/BUILD_PROVENANCE.md','docs/SECURITY_SPEC.md','.gitignore',
     'scripts/verify.mjs','scripts/build-provenance.mjs','scripts/check-build-integrity.mjs',...assetNames];
   const artifacts=Object.fromEntries([['cli','.lake/build/bin/tornado'],['worker','.lake/build/bin/tornado_prover_worker']]
     .map(([role,path])=>[role,{path,sha256:hash(get(path)),size:get(path).length}]));

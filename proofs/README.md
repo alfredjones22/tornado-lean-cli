@@ -125,5 +125,5 @@ This validation uses pinned Mathlib sources and official precompiled caches.
 Project proofs are compiled and kernel-checked against those imported library
 artifacts. The entire dependency tree is not rebuilt from source. Imported
 library/build artifacts and the compiler remain trusted. See the
-[parent specification](../docs/WITHDRAWAL_SECURITY_SPEC.md) for executable,
+[parent specification](../docs/SECURITY_SPEC.md) for executable,
 OS, setup, chain and side-channel boundaries.
